@@ -125,20 +125,28 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
     
     // Start the animation loop for the equalizer effect
     startAnimation();
-    
-    // Set up interval to update progress
+  }, [musicId, userId]);
+  
+  // Set up progress update interval
+  useEffect(() => {
     const progressInterval = setInterval(() => {
       if (isPlaying) {
         updateProgress();
       }
     }, 1000);
     
-    // Clean up on unmount
+    // Clean up interval on unmount or when isPlaying changes
     return () => {
       clearInterval(progressInterval);
+    };
+  }, [isPlaying, musicId]);
+  
+  // Clean up music on unmount
+  useEffect(() => {
+    return () => {
       MusicGenerationService.stopMusic();
     };
-  }, [musicId, userId, isPlaying]);
+  }, []);
   
   // Update status message when playback state changes
   useEffect(() => {
@@ -215,25 +223,33 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   const updateProgress = async () => {
     try {
       const playbackStatus = MusicGenerationService.getPlaybackStatus();
+      console.log('Progress update - playbackStatus:', playbackStatus, 'musicId:', musicId, 'isPlaying:', isPlaying);
       
       // If this music is playing, update the progress
       if (playbackStatus.isPlaying && playbackStatus.currentMusicId === musicId) {
+        console.log('This music is playing, updating progress...');
+        
         // Get the current playback position from the service
         const position = await MusicGenerationService.getPlaybackPosition();
+        console.log('Current position from service:', position);
         
         if (position !== null) {
           setCurrentTime(position);
           
           // Update progress percentage
           if (duration > 0) {
-            setProgress(position / duration);
+            const newProgress = position / duration;
+            setProgress(newProgress);
+            console.log('Updated progress:', newProgress, 'position:', position, 'duration:', duration);
           }
           
           // Check if we've reached the end of the track
           if (position >= duration) {
+            console.log('Reached end of track, stopping...');
             handleStop();
           }
         } else {
+          console.log('Position is null, using fallback...');
           // Fallback if we can't get the actual position
           setCurrentTime(prev => {
             const newTime = prev + 1;
@@ -250,6 +266,8 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
             setProgress(currentTime / duration);
           }
         }
+      } else {
+        console.log('This music is not playing or not the current music');
       }
     } catch (error) {
       console.error('Error updating progress:', error);
@@ -266,22 +284,31 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   // Handle play button press
   const handlePlay = async () => {
     try {
+      console.log('Play button pressed for music ID:', musicId);
+      console.log('Current music details:', musicDetails);
+      
       if (isPlaying) {
         // If already playing, pause
+        console.log('Pausing current music...');
         const success = await MusicGenerationService.pauseMusic();
         if (success) {
           setIsPlaying(false);
+          console.log('Music paused successfully');
         }
       } else {
         // If not playing, start or resume
         const playbackStatus = MusicGenerationService.getPlaybackStatus();
+        console.log('Current playback status:', playbackStatus);
+        console.log('Comparing musicId:', musicId, 'with currentMusicId:', playbackStatus.currentMusicId);
         
         let success;
-        if (playbackStatus.currentMusicId === musicId) {
-          // Resume if it's the same music
+        if (playbackStatus.currentMusicId === musicId && playbackStatus.isPlaying === false) {
+          // Resume if it's the same music but paused
+          console.log('Resuming music...');
           success = await MusicGenerationService.resumeMusic();
         } else {
-          // Start playing if it's different music
+          // Start playing if it's different music or not currently playing
+          console.log('Starting new music playback...');
           success = await MusicGenerationService.playMusic(musicId, userId);
           
           // Set the repeat mode and volume
@@ -293,6 +320,10 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
           setIsPlaying(true);
           setCurrentTime(0);
           setProgress(0);
+          console.log('Music playback started successfully');
+        } else {
+          console.log('Music playback failed');
+          setError('Failed to start music playback');
         }
       }
     } catch (error) {

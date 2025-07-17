@@ -1,6 +1,11 @@
 import { MoodEntry } from '../types';
 import { generateUUID } from '../utils/uuid';
 import StorageService from './StorageService';
+import WebStorageService from './WebStorageService';
+import MusicGenerationService from './MusicGenerationService';
+
+// Check if we're running on web
+const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 
 /**
  * Service for managing mood entries
@@ -43,9 +48,16 @@ class MoodEntryService {
       // Add new entry
       const updatedEntries = [...existingEntries, newEntry];
       
-      // Store all entries
-      const key = `mood_entries_${userId}`;
-      await StorageService.setItem(key, JSON.stringify(updatedEntries));
+      // Store all entries using appropriate storage service
+      if (isWeb) {
+        await WebStorageService.storeMoodEntries(userId, updatedEntries);
+      } else {
+        const key = `mood_entries_${userId}`;
+        await StorageService.setItem(key, JSON.stringify(updatedEntries));
+      }
+      
+      // Trigger music generation asynchronously
+      this.triggerMusicGeneration(userId, newEntry);
       
       return newEntry;
     } catch (error) {
@@ -61,14 +73,18 @@ class MoodEntryService {
    */
   async getMoodEntries(userId: string): Promise<MoodEntry[]> {
     try {
-      const key = `mood_entries_${userId}`;
-      const entriesData = await StorageService.getItem(key);
-      
-      if (!entriesData) {
-        return [];
+      if (isWeb) {
+        return await WebStorageService.retrieveMoodEntries(userId);
+      } else {
+        const key = `mood_entries_${userId}`;
+        const entriesData = await StorageService.getItem(key);
+        
+        if (!entriesData) {
+          return [];
+        }
+        
+        return JSON.parse(entriesData) as MoodEntry[];
       }
-      
-      return JSON.parse(entriesData) as MoodEntry[];
     } catch (error) {
       console.error('Error retrieving mood entries:', error);
       return [];
@@ -131,6 +147,50 @@ class MoodEntryService {
 
     const key = `mood_entries_${userId}`;
     await StorageService.setItem(key, JSON.stringify(filtered));
+  }
+
+  /**
+   * Trigger music generation for a mood entry
+   * @param userId The user ID
+   * @param moodEntry The mood entry to generate music for
+   */
+  private async triggerMusicGeneration(userId: string, moodEntry: MoodEntry): Promise<void> {
+    try {
+      console.log('Triggering music generation for mood entry:', moodEntry.entryId);
+      
+      // Initialize music generation service
+      await MusicGenerationService.initialize();
+      
+      // Generate music
+      const generatedMusic = await MusicGenerationService.generateMusic(userId, moodEntry);
+      
+      if (generatedMusic) {
+        console.log('Music generation completed successfully:', generatedMusic.musicId);
+        
+        // Update the mood entry to mark music as generated
+        const entries = await this.getMoodEntries(userId);
+        const updatedEntries = entries.map(entry => 
+          entry.entryId === moodEntry.entryId 
+            ? { ...entry, musicGenerated: true, musicId: generatedMusic.musicId }
+            : entry
+        );
+        
+        // Save updated entries using appropriate storage service
+        if (isWeb) {
+          await WebStorageService.storeMoodEntries(userId, updatedEntries);
+        } else {
+          const key = `mood_entries_${userId}`;
+          await StorageService.setItem(key, JSON.stringify(updatedEntries));
+        }
+        
+        console.log('Mood entry updated with music ID:', generatedMusic.musicId);
+      } else {
+        console.log('Music generation failed or was queued');
+      }
+    } catch (error) {
+      console.error('Error triggering music generation:', error);
+      // Don't throw error to avoid breaking mood entry saving
+    }
   }
 }
 

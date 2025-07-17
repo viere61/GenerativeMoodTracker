@@ -1,15 +1,37 @@
 import { MoodEntry, GeneratedMusic } from '../types';
 import { generateUUID } from '../utils/uuid';
 import LocalStorageManager from './LocalStorageManager';
+import WebStorageService from './WebStorageService';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import { API_CONFIG, getHuggingFaceToken, isDebugMode } from '../config/api';
+
+// Check if we're running on web
+const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 
 /**
- * Service for generating music based on mood entries
+ * Service for generating music based on mood entries using AI-powered music generation
+ * Falls back to sophisticated procedural music generation when external APIs are unavailable
  */
 class MusicGenerationService {
-  // API endpoint for music generation
-  private readonly API_ENDPOINT = 'https://api.generativemoodtracker.com/generate-music';
+  // Alternative AI music generation services
+  private readonly AI_SERVICES = {
+    // Hugging Face MusicGen (may not be available on free tier)
+    HUGGING_FACE: {
+      endpoint: 'https://api-inference.huggingface.co/models/facebook/musicgen-stereo-small',
+      enabled: true,
+    },
+    // Alternative: Mubert API (requires separate setup)
+    MUBERT: {
+      endpoint: 'https://api.mubert.com/v2/GenerateMusic',
+      enabled: false, // Requires API key setup
+    },
+    // Alternative: AIVA API (requires separate setup)
+    AIVA: {
+      endpoint: 'https://api.aiva.ai/v1/generate',
+      enabled: false, // Requires API key setup
+    }
+  };
   
   // Maximum number of retry attempts for music generation
   private readonly MAX_RETRIES = 3;
@@ -29,7 +51,8 @@ class MusicGenerationService {
   // Track generation status
   private generationInProgress = false;
   private generationQueue: Array<{userId: string, moodEntry: MoodEntry}> = [];
-  // Mapping of mood ratings to musical parameters
+  
+  // Enhanced mapping of mood ratings to musical parameters
   private moodToMusicMap: Record<number, {
     tempo: number;
     keySignature: string;
@@ -38,16 +61,20 @@ class MusicGenerationService {
     dynamics: number;
     instrumentation: string[];
     reverb: number;
+    complexity: number;
+    harmony: string;
   }> = {
     // Very negative moods (1-2): Slow, minor keys, sparse instrumentation
     1: {
-      tempo: 60, // Very slow
+      tempo: 60,
       keySignature: 'C minor',
       scaleType: 'minor',
-      density: 0.3, // Sparse notes
-      dynamics: 0.4, // Quiet
+      density: 0.3,
+      dynamics: 0.4,
       instrumentation: ['piano', 'strings'],
-      reverb: 0.8, // High reverb for melancholy feel
+      reverb: 0.8,
+      complexity: 0.3,
+      harmony: 'dissonant',
     },
     2: {
       tempo: 65,
@@ -57,6 +84,8 @@ class MusicGenerationService {
       dynamics: 0.5,
       instrumentation: ['piano', 'cello'],
       reverb: 0.7,
+      complexity: 0.4,
+      harmony: 'minor',
     },
     // Somewhat negative moods (3-4): Slow-medium, minor keys with occasional major chords
     3: {
@@ -67,25 +96,31 @@ class MusicGenerationService {
       dynamics: 0.5,
       instrumentation: ['piano', 'guitar', 'strings'],
       reverb: 0.6,
+      complexity: 0.5,
+      harmony: 'minor_major',
     },
     4: {
       tempo: 80,
       keySignature: 'A minor',
-      scaleType: 'dorian', // Minor with a brighter 6th
+      scaleType: 'dorian',
       density: 0.5,
       dynamics: 0.6,
       instrumentation: ['piano', 'guitar', 'bass'],
       reverb: 0.5,
+      complexity: 0.5,
+      harmony: 'dorian',
     },
     // Neutral moods (5-6): Medium tempo, mix of minor and major
     5: {
       tempo: 88,
       keySignature: 'F major',
-      scaleType: 'mixolydian', // Major with a flat 7th
+      scaleType: 'mixolydian',
       density: 0.6,
       dynamics: 0.6,
       instrumentation: ['piano', 'guitar', 'bass', 'light percussion'],
       reverb: 0.5,
+      complexity: 0.6,
+      harmony: 'mixolydian',
     },
     6: {
       tempo: 96,
@@ -95,6 +130,8 @@ class MusicGenerationService {
       dynamics: 0.7,
       instrumentation: ['piano', 'guitar', 'bass', 'percussion'],
       reverb: 0.4,
+      complexity: 0.6,
+      harmony: 'major',
     },
     // Positive moods (7-8): Medium-fast, major keys
     7: {
@@ -105,15 +142,19 @@ class MusicGenerationService {
       dynamics: 0.7,
       instrumentation: ['piano', 'guitar', 'bass', 'percussion', 'synth'],
       reverb: 0.4,
+      complexity: 0.7,
+      harmony: 'major',
     },
     8: {
       tempo: 112,
       keySignature: 'E major',
-      scaleType: 'lydian', // Major with a raised 4th - bright sound
+      scaleType: 'lydian',
       density: 0.7,
       dynamics: 0.8,
       instrumentation: ['piano', 'guitar', 'bass', 'percussion', 'synth'],
       reverb: 0.3,
+      complexity: 0.7,
+      harmony: 'lydian',
     },
     // Very positive moods (9-10): Fast, bright major keys
     9: {
@@ -124,6 +165,8 @@ class MusicGenerationService {
       dynamics: 0.8,
       instrumentation: ['piano', 'guitar', 'bass', 'full percussion', 'synth', 'brass'],
       reverb: 0.3,
+      complexity: 0.8,
+      harmony: 'lydian',
     },
     10: {
       tempo: 132,
@@ -132,11 +175,13 @@ class MusicGenerationService {
       density: 0.9,
       dynamics: 0.9,
       instrumentation: ['piano', 'guitar', 'bass', 'full percussion', 'synth', 'brass', 'strings'],
-      reverb: 0.2, // Less reverb for a clearer, more energetic sound
+      reverb: 0.2,
+      complexity: 0.9,
+      harmony: 'lydian',
     },
   };
 
-  // Emotion tags and their musical influences
+  // Enhanced emotion tags and their musical influences
   private emotionToMusicMap: Record<string, any> = {
     // Negative emotions
     'sad': {
@@ -144,30 +189,35 @@ class MusicGenerationService {
       tempoModifier: -10,
       instrumentAdd: ['cello'],
       reverbModifier: 0.1,
+      harmonyModifier: 'dissonant',
     },
     'anxious': {
       scaleModifier: 'diminished',
       tempoModifier: 5,
       instrumentAdd: ['tremolo strings'],
       rhythmComplexity: 0.7,
+      harmonyModifier: 'chromatic',
     },
     'angry': {
-      scaleModifier: 'phrygian', // Minor with a flat 2nd - tense sound
+      scaleModifier: 'phrygian',
       tempoModifier: 10,
       instrumentAdd: ['distorted guitar', 'heavy percussion'],
       dynamics: 0.8,
+      harmonyModifier: 'power_chords',
     },
     'frustrated': {
       scaleModifier: 'minor',
       tempoModifier: 5,
       instrumentAdd: ['distorted bass'],
       rhythmComplexity: 0.6,
+      harmonyModifier: 'minor',
     },
     'tired': {
       scaleModifier: 'minor',
       tempoModifier: -15,
       instrumentAdd: ['soft pad'],
       density: 0.4,
+      harmonyModifier: 'ambient',
     },
     
     // Neutral emotions
@@ -176,18 +226,21 @@ class MusicGenerationService {
       tempoModifier: -10,
       instrumentAdd: ['acoustic guitar', 'soft pad'],
       reverbModifier: 0.1,
+      harmonyModifier: 'open_chords',
     },
     'focused': {
       scaleModifier: 'major',
       tempoModifier: 0,
       instrumentAdd: ['piano', 'minimal percussion'],
       rhythmComplexity: 0.4,
+      harmonyModifier: 'minimal',
     },
     'reflective': {
       scaleModifier: 'dorian',
       tempoModifier: -5,
       instrumentAdd: ['piano', 'ambient pad'],
       reverbModifier: 0.1,
+      harmonyModifier: 'modal',
     },
     
     // Positive emotions
@@ -196,30 +249,42 @@ class MusicGenerationService {
       tempoModifier: 10,
       instrumentAdd: ['bright synth'],
       dynamics: 0.8,
+      harmonyModifier: 'major',
     },
     'excited': {
       scaleModifier: 'lydian',
       tempoModifier: 15,
       instrumentAdd: ['bright synth', 'full percussion'],
       dynamics: 0.9,
+      harmonyModifier: 'lydian',
     },
     'grateful': {
       scaleModifier: 'major',
       tempoModifier: 0,
       instrumentAdd: ['acoustic guitar', 'warm pad'],
       reverbModifier: 0.05,
-    },
-    'inspired': {
-      scaleModifier: 'lydian',
-      tempoModifier: 5,
-      instrumentAdd: ['strings', 'choir'],
-      reverbModifier: 0.1,
+      harmonyModifier: 'warm',
     },
     'peaceful': {
       scaleModifier: 'major',
-      tempoModifier: -15,
-      instrumentAdd: ['soft pad', 'gentle piano'],
-      reverbModifier: 0.15,
+      tempoModifier: -5,
+      instrumentAdd: ['flute', 'soft strings'],
+      reverbModifier: 0.1,
+      harmonyModifier: 'peaceful',
+    },
+    'energetic': {
+      scaleModifier: 'major',
+      tempoModifier: 15,
+      instrumentAdd: ['electric guitar', 'drums'],
+      dynamics: 0.9,
+      harmonyModifier: 'energetic',
+    },
+    'creative': {
+      scaleModifier: 'mixolydian',
+      tempoModifier: 5,
+      instrumentAdd: ['synth', 'experimental sounds'],
+      complexity: 0.8,
+      harmonyModifier: 'experimental',
     },
   };
 
@@ -326,6 +391,16 @@ class MusicGenerationService {
         if (modifiers.rhythmComplexity) {
           params.rhythmComplexity = modifiers.rhythmComplexity;
         }
+
+        // Apply harmony modifier
+        if (modifiers.harmonyModifier) {
+          params.harmony = modifiers.harmonyModifier;
+        }
+
+        // Apply complexity modifier
+        if (modifiers.complexity) {
+          params.complexity = modifiers.complexity;
+        }
       }
     });
     
@@ -417,7 +492,8 @@ class MusicGenerationService {
       parameters: musicParameters,
       reflection: moodEntry.reflection,
       moodRating: moodEntry.moodRating,
-      emotionTags: moodEntry.emotionTags
+      emotionTags: moodEntry.emotionTags,
+      moodEntry: moodEntry // Include the full mood entry object
     };
   }
 
@@ -463,20 +539,25 @@ class MusicGenerationService {
    */
   async initialize(): Promise<void> {
     try {
-      // Ensure music directory exists
-      const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
+      if (isWeb) {
+        // On web, we don't need to create directories
+        console.log('MusicGenerationService initialized for web');
+      } else {
+        // On native platforms, ensure music directory exists
+        const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
+        }
+        
+        // Initialize audio
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
       }
-      
-      // Initialize audio
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
     } catch (error) {
       console.error('Failed to initialize MusicGenerationService:', error);
     }
@@ -512,13 +593,14 @@ class MusicGenerationService {
       const generatedMusic = await this.generateMusicFromAPI(request, musicObject, 0);
       
       // Update the mood entry to link it to the generated music
-      await LocalStorageManager.updateMoodEntry(userId, moodEntry.entryId, {
+      const storageService = isWeb ? WebStorageService : LocalStorageManager;
+      await storageService.updateMoodEntry(userId, moodEntry.entryId, {
         musicGenerated: true,
         musicId: generatedMusic.musicId
       });
       
       // Store the generated music
-      await LocalStorageManager.storeGeneratedMusic(userId, generatedMusic);
+      await storageService.storeGeneratedMusic(userId, generatedMusic);
       
       this.generationInProgress = false;
       
@@ -550,7 +632,52 @@ class MusicGenerationService {
   }
 
   /**
-   * Generate music using the API
+   * Convert mood entry to a text prompt for MusicGen API
+   * @param moodEntry The mood entry to convert
+   * @returns Text prompt for music generation
+   */
+  private createMusicPrompt(moodEntry: MoodEntry): string {
+    const { moodRating, emotionTags, reflection } = moodEntry;
+    
+    // Base mood description based on rating
+    let baseMood = '';
+    if (moodRating <= 2) baseMood = 'melancholic, sad, slow';
+    else if (moodRating <= 4) baseMood = 'contemplative, introspective, calm';
+    else if (moodRating <= 6) baseMood = 'neutral, balanced, peaceful';
+    else if (moodRating <= 8) baseMood = 'uplifting, positive, energetic';
+    else baseMood = 'joyful, exuberant, celebratory';
+    
+    // Add emotion tag influences
+    const emotionInfluences = emotionTags.map(tag => {
+      const tagLower = tag.toLowerCase();
+      if (['happy', 'excited', 'grateful'].includes(tagLower)) return 'bright, cheerful';
+      if (['sad', 'anxious', 'frustrated'].includes(tagLower)) return 'somber, reflective';
+      if (['calm', 'peaceful', 'focused'].includes(tagLower)) return 'gentle, ambient';
+      if (['angry', 'energetic'].includes(tagLower)) return 'intense, powerful';
+      return '';
+    }).filter(influence => influence !== '');
+    
+    // Extract key words from reflection (simple keyword extraction)
+    const reflectionWords = reflection.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 3)
+      .slice(0, 3); // Take first 3 meaningful words
+    
+    // Combine all elements
+    const promptElements = [baseMood, ...emotionInfluences, ...reflectionWords];
+    const prompt = promptElements.join(', ');
+    
+    // Add genre/style suggestions based on mood
+    let genre = '';
+    if (moodRating <= 3) genre = 'ambient, classical, piano';
+    else if (moodRating <= 6) genre = 'acoustic, folk, jazz';
+    else genre = 'pop, electronic, upbeat';
+    
+    return `${prompt}, ${genre} music`;
+  }
+
+  /**
+   * Generate music using available AI services or fallback to procedural generation
    * @param request Music generation request
    * @param musicObject Music object to update
    * @param retryCount Current retry count
@@ -562,36 +689,259 @@ class MusicGenerationService {
     retryCount: number
   ): Promise<GeneratedMusic> {
     try {
-      // In a real implementation, this would make an API call to a music generation service
-      // For this implementation, we'll simulate the API call and use a placeholder audio file
+      if (isDebugMode()) {
+        console.log('Starting AI-powered music generation...');
+        console.log('Mood entry:', request.moodEntry);
+      }
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Create text prompt from mood entry
+      if (!request.moodEntry) {
+        console.error('Mood entry is undefined in request:', request);
+        throw new Error('Mood entry is required for music generation');
+      }
       
-      // In a real implementation, we would download the generated audio file
-      // For this implementation, we'll use a placeholder file path
-      const localFilePath = `${this.MUSIC_DIRECTORY}${musicObject.musicId}.mp3`;
+      const prompt = this.createMusicPrompt(request.moodEntry);
+      if (isDebugMode()) {
+        console.log('Generated prompt:', prompt);
+      }
       
-      // Simulate successful generation with a placeholder duration
-      const updatedMusicObject: GeneratedMusic = {
-        ...musicObject,
-        audioUrl: localFilePath,
-        duration: 60 + Math.random() * 120, // Random duration between 60-180 seconds
-      };
+      // Try Hugging Face MusicGen first
+      if (this.AI_SERVICES.HUGGING_FACE.enabled) {
+        try {
+          return await this.tryHuggingFaceGeneration(prompt, musicObject);
+        } catch (error) {
+          if (isDebugMode()) {
+            console.log('Hugging Face generation failed, trying alternatives...');
+          }
+        }
+      }
       
-      return updatedMusicObject;
+      // Try other AI services if available
+      if (this.AI_SERVICES.MUBERT.enabled) {
+        try {
+          return await this.tryMubertGeneration(prompt, musicObject);
+        } catch (error) {
+          if (isDebugMode()) {
+            console.log('Mubert generation failed, trying alternatives...');
+          }
+        }
+      }
+      
+      // If all AI services fail, use enhanced procedural generation
+      if (isDebugMode()) {
+        console.log('All AI services unavailable, using enhanced procedural generation...');
+      }
+      
+      return await this.generateProceduralMusic(musicObject, request.moodEntry);
+      
     } catch (error) {
-      console.error('Music generation API error:', error);
+      console.error('Music generation error:', error);
       
-      // Retry if we haven't exceeded the maximum retry count
-      if (retryCount < this.MAX_RETRIES) {
+      // If this is not the last retry attempt, try again
+      if (retryCount < this.MAX_RETRIES - 1) {
         console.log(`Retrying music generation (attempt ${retryCount + 1}/${this.MAX_RETRIES})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
         return this.generateMusicFromAPI(request, musicObject, retryCount + 1);
       }
       
-      // If we've exceeded the retry count, return a fallback music object
-      return this.generateFallbackMusic(musicObject);
+      // If all retries failed, use fallback
+      console.log('All retry attempts failed, using fallback');
+      return await this.generateProceduralMusic(musicObject, request.moodEntry);
     }
+  }
+
+  /**
+   * Try to generate music using Hugging Face MusicGen API
+   */
+  private async tryHuggingFaceGeneration(prompt: string, musicObject: GeneratedMusic): Promise<GeneratedMusic> {
+    const apiToken = getHuggingFaceToken();
+    
+    if (isDebugMode()) {
+      console.log('Trying Hugging Face MusicGen API...');
+      console.log('Endpoint:', this.AI_SERVICES.HUGGING_FACE.endpoint);
+    }
+    
+    const response = await fetch(this.AI_SERVICES.HUGGING_FACE.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: prompt
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Hugging Face API failed: ${response.status} ${errorText}`);
+    }
+    
+    const audioBlob = await response.blob();
+    
+    if (isDebugMode()) {
+      console.log('Hugging Face audio received, size:', audioBlob.size, 'bytes');
+    }
+    
+    const audioUrl = await this.saveAudioFile(audioBlob, musicObject.musicId);
+    musicObject.audioUrl = audioUrl;
+    musicObject.duration = 8;
+    
+    return musicObject;
+  }
+
+  /**
+   * Try to generate music using Mubert API (placeholder for future implementation)
+   */
+  private async tryMubertGeneration(prompt: string, musicObject: GeneratedMusic): Promise<GeneratedMusic> {
+    // This is a placeholder for Mubert API integration
+    // Would require API key and different request format
+    throw new Error('Mubert API not yet implemented');
+  }
+
+  /**
+   * Generate sophisticated procedural music using Web Audio API
+   */
+  private async generateProceduralMusic(musicObject: GeneratedMusic, moodEntry: MoodEntry): Promise<GeneratedMusic> {
+    if (isDebugMode()) {
+      console.log('Generating enhanced procedural music...');
+    }
+    
+    // Generate music parameters based on mood
+    const parameters = this.generateMusicParameters(moodEntry);
+    
+    if (isWeb) {
+      // Use Web Audio API for sophisticated procedural generation
+      const audioUrl = await this.generateWebAudio(musicObject, 8);
+      musicObject.audioUrl = audioUrl;
+      musicObject.duration = 8;
+      
+      if (isDebugMode()) {
+        console.log('Enhanced procedural audio generated for web');
+      }
+    } else {
+      // For mobile, create a simple audio file
+      const audioUrl = await this.createSimpleAudioFile(musicObject, parameters);
+      musicObject.audioUrl = audioUrl;
+      musicObject.duration = 8;
+      
+      if (isDebugMode()) {
+        console.log('Simple audio file created for mobile');
+      }
+    }
+    
+    return musicObject;
+  }
+
+  /**
+   * Save audio blob to file system or create blob URL for web
+   */
+  private async saveAudioFile(audioBlob: Blob, musicId: string): Promise<string> {
+    if (isWeb) {
+      // On web, store the blob data in localStorage and create a persistent URL
+      const audioArrayBuffer = await audioBlob.arrayBuffer();
+      const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioArrayBuffer)));
+      
+      // Store the base64 data in localStorage
+      const storageKey = `audio_data_${musicId}`;
+      localStorage.setItem(storageKey, audioBase64);
+      
+      // Create a blob URL for immediate use
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      if (isDebugMode()) {
+        console.log('Audio data stored with key:', storageKey);
+        console.log('Audio blob URL created for web:', audioUrl);
+      }
+      
+      return audioUrl;
+    } else {
+      // On native platforms, save to file system
+      const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
+      }
+      
+      const localFilePath = `${this.MUSIC_DIRECTORY}${musicId}.wav`;
+      const audioArrayBuffer = await audioBlob.arrayBuffer();
+      const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioArrayBuffer)));
+      
+      await FileSystem.writeAsStringAsync(localFilePath, audioBase64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      if (isDebugMode()) {
+        console.log('Audio file saved to:', localFilePath);
+      }
+      
+      return localFilePath;
+    }
+  }
+
+  /**
+   * Create a simple audio file for mobile platforms
+   */
+  private async createSimpleAudioFile(musicObject: GeneratedMusic, parameters: any): Promise<string> {
+    // Create a simple WAV file with a basic tone
+    const sampleRate = 44100;
+    const duration = 8; // 8 seconds
+    const numSamples = sampleRate * duration;
+    
+    // Create a simple sine wave based on mood
+    const frequency = parameters.tempo * 2; // Use tempo to influence frequency
+    const amplitude = parameters.dynamics * 0.3;
+    
+    // Create WAV file buffer
+    const buffer = new ArrayBuffer(44 + numSamples * 2); // 44 bytes header + 16-bit samples
+    const view = new DataView(buffer);
+    
+    // Write WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+    
+    // Write audio data
+    for (let i = 0; i < numSamples; i++) {
+      const time = i / sampleRate;
+      const sample = amplitude * Math.sin(2 * Math.PI * frequency * time);
+      const sample16 = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
+      view.setInt16(44 + i * 2, sample16, true);
+    }
+    
+    // Save to file system
+    const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
+    }
+    
+    const localFilePath = `${this.MUSIC_DIRECTORY}${musicObject.musicId}.wav`;
+    const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    
+    await FileSystem.writeAsStringAsync(localFilePath, audioBase64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    
+    if (isDebugMode()) {
+      console.log('Simple audio file created for mobile:', localFilePath);
+    }
+    
+    return localFilePath;
   }
 
   /**
@@ -601,15 +951,74 @@ class MusicGenerationService {
    */
   private async generateFallbackMusic(musicObject: GeneratedMusic): Promise<GeneratedMusic> {
     try {
-      // In a real implementation, this would generate a simple fallback audio file
-      // For this implementation, we'll use a placeholder file path
-      const localFilePath = `${this.MUSIC_DIRECTORY}fallback_${musicObject.musicId}.mp3`;
+      console.log('Generating fallback music due to API failure...');
+      
+      let localFilePath: string;
+      const duration = 8; // 8 seconds of generated music
+      
+      if (isWeb) {
+        // On web, generate a more sophisticated audio using Web Audio API
+        localFilePath = await this.generateWebAudio(musicObject, duration);
+        console.log('Fallback audio blob URL created for web:', localFilePath);
+      } else {
+        // On native platforms, save to file system
+        const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
+        }
+        
+        localFilePath = `${this.MUSIC_DIRECTORY}fallback_${musicObject.musicId}.wav`;
+        
+        // Create a minimal WAV file (1 second of silence)
+        const sampleRate = 44100;
+        const numSamples = sampleRate * duration;
+        
+        // WAV file header (44 bytes) + audio data
+        const buffer = new ArrayBuffer(44 + numSamples * 2); // 16-bit samples
+        const view = new DataView(buffer);
+        
+        // Write WAV header
+        const writeString = (offset: number, string: string) => {
+          for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+          }
+        };
+        
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + numSamples * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, numSamples * 2, true);
+        
+        // Write silence (all zeros)
+        for (let i = 0; i < numSamples; i++) {
+          view.setInt16(44 + i * 2, 0, true);
+        }
+        
+        // Convert to base64 and save
+        const uint8Array = new Uint8Array(buffer);
+        const base64 = btoa(String.fromCharCode(...uint8Array));
+        
+        await FileSystem.writeAsStringAsync(localFilePath, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        console.log('Fallback audio file created:', localFilePath);
+      }
       
       // Update the music object with fallback information
       const updatedMusicObject: GeneratedMusic = {
         ...musicObject,
         audioUrl: localFilePath,
-        duration: 30, // Short fallback duration
+        duration: duration,
       };
       
       return updatedMusicObject;
@@ -626,6 +1035,285 @@ class MusicGenerationService {
   }
 
   /**
+   * Generate audio using Web Audio API for web fallback
+   * @param musicObject Music object with parameters
+   * @param duration Duration in seconds
+   * @returns Blob URL of generated audio
+   */
+  private async generateWebAudio(musicObject: GeneratedMusic, duration: number): Promise<string> {
+    return new Promise((resolve) => {
+      try {
+        // Create audio context
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Resume audio context if it's suspended (required for web browsers)
+        if (audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            console.log('Audio context resumed');
+          }).catch(error => {
+            console.error('Failed to resume audio context:', error);
+          });
+        }
+        
+        const sampleRate = audioContext.sampleRate;
+        const numSamples = sampleRate * duration;
+        
+        // Create audio buffer
+        const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+        
+        // Generate music based on mood parameters
+        const { tempo, key, instruments, mood } = musicObject.musicParameters;
+        
+        // Create a simple melody based on mood
+        const baseFreq = this.getBaseFrequency(key);
+        const notes = this.generateMelody(mood, tempo, duration);
+        
+        // Generate audio samples
+        for (let i = 0; i < numSamples; i++) {
+          const time = i / sampleRate;
+          let sample = 0;
+          
+          // Add melody notes
+          notes.forEach(note => {
+            if (time >= note.start && time < note.end) {
+              const freq = baseFreq * Math.pow(2, note.pitch / 12);
+              const amplitude = note.velocity * 0.5; // Increased amplitude
+              sample += amplitude * Math.sin(2 * Math.PI * freq * time);
+            }
+          });
+          
+          // Add some harmonics for richer sound
+          sample += 0.2 * Math.sin(2 * Math.PI * baseFreq * 2 * time);
+          sample += 0.1 * Math.sin(2 * Math.PI * baseFreq * 3 * time);
+          
+          // Add a bass line for more presence
+          sample += 0.15 * Math.sin(2 * Math.PI * baseFreq * 0.5 * time);
+          
+          // Apply envelope
+          const envelope = this.getEnvelope(time, duration);
+          sample *= envelope;
+          
+          // Clamp to prevent distortion but allow more volume
+          channelData[i] = Math.max(-0.9, Math.min(0.9, sample));
+        }
+        
+        // Convert to WAV
+        const wavBuffer = this.audioBufferToWav(audioBuffer);
+        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        
+        // Store the audio data in localStorage for later retrieval
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Data = reader.result as string;
+          const audioData = base64Data.split(',')[1]; // Remove data URL prefix
+          const storageKey = `audio_data_${musicObject.musicId}`;
+          localStorage.setItem(storageKey, audioData);
+          console.log('Stored audio data for music ID:', musicObject.musicId);
+        };
+        reader.readAsDataURL(blob);
+        
+        resolve(url);
+      } catch (error) {
+        console.error('Web Audio generation failed:', error);
+        // Fallback to simple tone generation
+        try {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const sampleRate = audioContext.sampleRate;
+          const numSamples = sampleRate * duration;
+          
+          // Create audio buffer for fallback
+          const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
+          const channelData = audioBuffer.getChannelData(0);
+          
+          // Generate a simple sine wave
+          const frequency = 440; // A4 note
+          const amplitude = 0.3;
+          
+          for (let i = 0; i < numSamples; i++) {
+            const time = i / sampleRate;
+            const sample = amplitude * Math.sin(2 * Math.PI * frequency * time);
+            
+            // Apply envelope
+            const envelope = this.getEnvelope(time, duration);
+            channelData[i] = sample * envelope;
+          }
+          
+          // Convert to WAV
+          const wavBuffer = this.audioBufferToWav(audioBuffer);
+          const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          
+          // Store the fallback audio data
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64Data = reader.result as string;
+            const audioData = base64Data.split(',')[1]; // Remove data URL prefix
+            const storageKey = `audio_data_${musicObject.musicId}`;
+            localStorage.setItem(storageKey, audioData);
+            console.log('Stored fallback audio data for music ID:', musicObject.musicId);
+          };
+          reader.readAsDataURL(blob);
+          
+          resolve(url);
+        } catch (fallbackError) {
+          console.error('Fallback audio generation also failed:', fallbackError);
+          // Create a minimal silent audio file as last resort
+          const silentBuffer = new ArrayBuffer(44 + 44100 * duration * 2);
+          const view = new DataView(silentBuffer);
+          
+          // Write minimal WAV header
+          const writeString = (offset: number, string: string) => {
+            for (let i = 0; i < string.length; i++) {
+              view.setUint8(offset + i, string.charCodeAt(i));
+            }
+          };
+          
+          writeString(0, 'RIFF');
+          view.setUint32(4, 36 + 44100 * duration * 2, true);
+          writeString(8, 'WAVE');
+          writeString(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true);
+          view.setUint16(22, 1, true);
+          view.setUint32(24, 44100, true);
+          view.setUint32(28, 44100 * 2, true);
+          view.setUint16(32, 2, true);
+          view.setUint16(34, 16, true);
+          writeString(36, 'data');
+          view.setUint32(40, 44100 * duration * 2, true);
+          
+          const blob = new Blob([silentBuffer], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          
+          // Store the silent audio data
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64Data = reader.result as string;
+            const audioData = base64Data.split(',')[1];
+            const storageKey = `audio_data_${musicObject.musicId}`;
+            localStorage.setItem(storageKey, audioData);
+            console.log('Stored silent audio data for music ID:', musicObject.musicId);
+          };
+          reader.readAsDataURL(blob);
+          
+          resolve(url);
+        }
+      }
+    });
+  }
+
+  /**
+   * Get base frequency for a musical key
+   */
+  private getBaseFrequency(key: string): number {
+    const keyMap: { [key: string]: number } = {
+      'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13,
+      'E': 329.63, 'F': 349.23, 'F#': 369.99, 'G': 392.00,
+      'G#': 415.30, 'A': 440.00, 'A#': 466.16, 'B': 493.88
+    };
+    return keyMap[key.split(' ')[0]] || 440;
+  }
+
+  /**
+   * Generate melody notes based on mood
+   */
+  private generateMelody(mood: string, tempo: number, duration: number): Array<{
+    start: number;
+    end: number;
+    pitch: number;
+    velocity: number;
+  }> {
+    const notes = [];
+    const beatDuration = 60 / tempo;
+    const numBeats = Math.floor(duration / beatDuration);
+    
+    for (let i = 0; i < numBeats; i++) {
+      const start = i * beatDuration;
+      const end = start + beatDuration * 0.8;
+      
+      // Generate pitch based on mood
+      let pitch = 0;
+      if (mood.includes('joyful') || mood.includes('uplifting')) {
+        pitch = [0, 4, 7, 12][i % 4]; // Major scale
+      } else if (mood.includes('melancholic') || mood.includes('sad')) {
+        pitch = [0, 3, 7, 10][i % 4]; // Minor scale
+      } else {
+        pitch = [0, 5, 7, 12][i % 4]; // Pentatonic scale
+      }
+      
+      notes.push({
+        start,
+        end,
+        pitch,
+        velocity: 0.5 + Math.random() * 0.3
+      });
+    }
+    
+    return notes;
+  }
+
+  /**
+   * Get envelope for audio shaping
+   */
+  private getEnvelope(time: number, duration: number): number {
+    const attack = 0.1;
+    const release = 0.3;
+    
+    if (time < attack) {
+      return time / attack;
+    } else if (time > duration - release) {
+      return (duration - time) / release;
+    }
+    return 1;
+  }
+
+  /**
+   * Convert AudioBuffer to WAV format
+   */
+  private audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
+    const length = buffer.length;
+    const sampleRate = buffer.sampleRate;
+    const channels = buffer.numberOfChannels;
+    const arrayBuffer = new ArrayBuffer(44 + length * channels * 2);
+    const view = new DataView(arrayBuffer);
+    
+    // Write WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * channels * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, channels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * channels * 2, true);
+    view.setUint16(32, channels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * channels * 2, true);
+    
+    // Write audio data
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < channels; channel++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+        offset += 2;
+      }
+    }
+    
+    return arrayBuffer;
+  }
+
+  /**
    * Play generated music
    * @param musicId ID of the music to play
    * @param userId User ID
@@ -633,25 +1321,67 @@ class MusicGenerationService {
    */
   async playMusic(musicId: string, userId: string): Promise<boolean> {
     try {
+      console.log('playMusic called with musicId:', musicId, 'userId:', userId);
+      
       // Stop any currently playing music
       await this.stopMusic();
       
-      // Retrieve the music object
-      const musicObject = await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
+      // Retrieve the music object using appropriate storage service
+      const storageService = isWeb ? WebStorageService : LocalStorageManager;
+      const musicObject = await storageService.retrieveGeneratedMusic(userId, musicId);
+      
+      console.log('Retrieved music object:', musicObject);
       
       if (!musicObject || !musicObject.audioUrl) {
         console.error('Music not found or has no audio URL');
         return false;
       }
       
+      console.log('Audio URL:', musicObject.audioUrl);
+      
       // Create and load the sound object
       this.soundObject = new Audio.Sound();
-      await this.soundObject.loadAsync({ uri: musicObject.audioUrl });
+      console.log('Created Audio.Sound object');
+      
+      // For web, handle blob URLs specially
+      if (isWeb && musicObject.audioUrl.startsWith('blob:')) {
+        console.log('Handling blob URL for web');
+        
+        // Try to get the audio data from localStorage and regenerate blob URL
+        const storageKey = `audio_data_${musicId}`;
+        const storedAudioData = localStorage.getItem(storageKey);
+        
+        console.log('Stored audio data found:', !!storedAudioData);
+        
+        if (storedAudioData) {
+          // Convert base64 back to blob and create new URL
+          const audioBytes = atob(storedAudioData);
+          const audioArray = new Uint8Array(audioBytes.length);
+          for (let i = 0; i < audioBytes.length; i++) {
+            audioArray[i] = audioBytes.charCodeAt(i);
+          }
+          const audioBlob = new Blob([audioArray], { type: 'audio/wav' });
+          const newBlobUrl = URL.createObjectURL(audioBlob);
+          
+          console.log('Regenerated blob URL:', newBlobUrl);
+          await this.soundObject.loadAsync({ uri: newBlobUrl });
+        } else {
+          console.log('No stored audio data found, trying original URL');
+          await this.soundObject.loadAsync({ uri: musicObject.audioUrl });
+        }
+      } else {
+        console.log('Loading audio with URL:', musicObject.audioUrl);
+        await this.soundObject.loadAsync({ uri: musicObject.audioUrl });
+      }
+      
+
+      
+      console.log('Audio loaded successfully');
       
       // Set up playback status update callback
       this.soundObject.setOnPlaybackStatusUpdate(async status => {
         if (status.isLoaded && status.didJustFinish) {
-          if (this.isRepeatEnabled && this.currentMusicId) {
+          if (this.isRepeatEnabled && this.currentMusicId && this.soundObject) {
             // If repeat is enabled, restart the track
             await this.soundObject.setPositionAsync(0);
             await this.soundObject.playAsync();
@@ -664,9 +1394,31 @@ class MusicGenerationService {
       });
       
       // Start playback
-      await this.soundObject.playAsync();
-      this.isPlaying = true;
-      this.currentMusicId = musicId;
+      console.log('Starting playback...');
+      try {
+        // For web, ensure audio context is resumed
+        if (isWeb && typeof window !== 'undefined' && window.AudioContext) {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          if (audioContext.state === 'suspended') {
+            console.log('Resuming audio context for playback...');
+            await audioContext.resume();
+          }
+        }
+        
+        await this.soundObject.playAsync();
+        this.isPlaying = true;
+        this.currentMusicId = musicId;
+        console.log('Playback started successfully');
+        
+        // Get initial status to verify playback
+        const status = await this.soundObject.getStatusAsync();
+        console.log('Initial playback status:', status);
+      } catch (playError) {
+        console.error('Failed to start playback:', playError);
+        this.isPlaying = false;
+        this.currentMusicId = null;
+        throw playError;
+      }
       
       return true;
     } catch (error) {
@@ -848,8 +1600,8 @@ class MusicGenerationService {
    */
   async retrieveGeneratedMusic(userId: string, musicId: string): Promise<GeneratedMusic | null> {
     try {
-      const key = `generated_music_${userId}_${musicId}`;
-      return await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
+      const storageService = isWeb ? WebStorageService : LocalStorageManager;
+      return await storageService.retrieveGeneratedMusic(userId, musicId);
     } catch (error) {
       console.error('Failed to retrieve music:', error);
       return null;
@@ -869,8 +1621,9 @@ class MusicGenerationService {
         await this.stopMusic();
       }
       
-      // Get the music object
-      const musicObject = await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
+      // Get the music object using appropriate storage service
+      const storageService = isWeb ? WebStorageService : LocalStorageManager;
+      const musicObject = await storageService.retrieveGeneratedMusic(userId, musicId);
       
       if (!musicObject) {
         return false;
@@ -884,15 +1637,81 @@ class MusicGenerationService {
         }
       }
       
-      // Remove from storage
-      const key = `generated_music_${userId}_${musicId}`;
-      await LocalStorageManager.removeData(key, true);
+      // Remove from storage using appropriate storage service
+      if (isWeb) {
+        // For web, remove from localStorage
+        localStorage.removeItem(`generated_music_${userId}_${musicId}`);
+        localStorage.removeItem(`audio_data_${musicId}`);
+      } else {
+        // For native, use LocalStorageManager
+        await LocalStorageManager.removeData(`generated_music_${userId}_${musicId}`, true);
+      }
       
       return true;
     } catch (error) {
       console.error('Failed to delete music:', error);
       return false;
     }
+  }
+
+  /**
+   * Debug method to test music generation
+   * @param userId User ID
+   * @returns Promise resolving to the generated music object or null
+   */
+  async debugMusicGeneration(userId: string): Promise<GeneratedMusic | null> {
+    try {
+      console.log('=== DEBUG: Testing Music Generation ===');
+      
+      // Create a test mood entry
+      const testMoodEntry: MoodEntry = {
+        entryId: generateUUID(),
+        userId,
+        timestamp: Date.now(),
+        moodRating: 7,
+        emotionTags: ['happy', 'excited'],
+        reflection: 'This is a test mood entry for debugging music generation',
+        musicGenerated: false
+      };
+      
+      console.log('Test mood entry created:', testMoodEntry);
+      
+      // Initialize the service
+      await this.initialize();
+      console.log('Music generation service initialized');
+      
+      // Generate music
+      const result = await this.generateMusic(userId, testMoodEntry);
+      
+      if (result) {
+        console.log('Music generation successful:', result);
+        return result;
+      } else {
+        console.log('Music generation failed or was queued');
+        return null;
+      }
+    } catch (error) {
+      console.error('Debug music generation failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the latest generated music ID for a user
+   * @param userId User ID
+   * @returns Latest music ID or null if none found
+   */
+  getLatestMusicId(userId: string): string | null {
+    if (isWeb) {
+      const keys = Object.keys(localStorage);
+      const audioKeys = keys.filter(key => key.startsWith('audio_data_'));
+      if (audioKeys.length > 0) {
+        // Get the most recent one
+        const latestKey = audioKeys[audioKeys.length - 1];
+        return latestKey.replace('audio_data_', '');
+      }
+    }
+    return null;
   }
 }
 

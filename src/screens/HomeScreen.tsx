@@ -9,6 +9,7 @@ import NotificationService from '../services/NotificationService';
 import TimeWindowCountdown from '../components/TimeWindowCountdown';
 import { formatTimeForDisplay } from '../utils/timeWindow';
 import UserPreferencesService from '../services/UserPreferencesService';
+import MusicDebugPanel from '../components/MusicDebugPanel';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -366,6 +367,9 @@ const HomeScreen = () => {
           />
         </View>
       </View>
+
+      {/* Music Generation Debug Panel */}
+      <MusicDebugPanel userId="demo-user" />
     </ScrollView>
   );
 };

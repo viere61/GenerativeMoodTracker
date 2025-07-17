@@ -476,19 +476,11 @@ class LocalStorageManager {
    */
   async retrieveAllGeneratedMusic(userId: string): Promise<GeneratedMusic[]> {
     try {
-      // Get all keys from SecureStore that match the pattern
-      // This is a simplified approach - in a real app we would maintain an index
-      const allKeys = await AsyncStorage.getAllKeys();
-      const musicKeys = allKeys.filter(key => 
-        key.startsWith(`${LocalStorageManager.GENERATED_MUSIC_KEY}_${userId}_`)
-      );
-      
-      // Retrieve all music items
-      const musicPromises = musicKeys.map(key => this.retrieveData<GeneratedMusic>(key, true));
-      const musicItems = await Promise.all(musicPromises);
-      
-      // Filter out null values
-      return musicItems.filter((item): item is GeneratedMusic => item !== null);
+      // Note: SecureStore doesn't support getAllKeys(), so we need to maintain an index
+      // For now, we'll return an empty array since we don't have a proper index
+      // In a real implementation, we would maintain a separate index of music IDs
+      console.warn('retrieveAllGeneratedMusic: Not fully implemented - SecureStore limitation');
+      return [];
     } catch (error) {
       console.error('Failed to retrieve all generated music:', error);
       return [];
