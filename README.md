@@ -10,6 +10,14 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 - **Mood History**: View your mood entries and trends over time with detailed analytics
 - **Settings**: Change your preferred time range, notification settings, and more
 
+### Email Notifications
+- **Automatic Reminders**: Receive email reminders when you open the app during your preferred time window (if you haven't logged today)
+- **Time Window Respect**: Reminders only sent during your configured time range (e.g., 21:00-22:00)
+- **Smart Detection**: Automatically detects if you've already logged a mood today
+- **Weekly Reports**: Optional weekly mood statistics and insights
+- **Test Emails**: Verify email configuration with test emails
+- **Backend Integration**: Deployed on Railway with SendGrid email service
+
 ### Music Generation System
 - **AI-Powered Music Generation**: Attempts to generate music using Hugging Face MusicGen API
 - **Intelligent Fallback System**: When AI services are unavailable, generates procedural music using Web Audio API
@@ -89,6 +97,8 @@ The fallback system incorporates basic musical theory:
 - **NotificationService**: Handles push notifications (mobile only)
 - **TimeWindowService**: Manages the random time window system
 - **StorageService**: Platform-appropriate data persistence
+- **EmailNotificationService**: Manages automatic email reminders and weekly reports
+- **UserPreferencesService**: Handles user settings and email notification preferences
 
 ### Storage Strategy
 - **Web**: Uses localStorage for music data and IndexedDB for mood entries
@@ -108,6 +118,7 @@ The fallback system incorporates basic musical theory:
 - **Hugging Face API**: Returns 404 errors due to endpoint availability issues
 - **Notifications**: Not working in Expo Go (requires development build)
 - **Web Audio Context**: May require user interaction to resume suspended context
+- **Email Reminders**: Only work when app is open (push notifications needed for background reminders)
 
 ### Technical Limitations
 - **Audio Quality**: Fallback system generates basic procedural music (not professional quality)
@@ -121,6 +132,8 @@ The fallback system incorporates basic musical theory:
 - **Offline Support**: Better offline music generation capabilities
 - **Audio Effects**: Add reverb, delay, and other audio effects
 - **Export Features**: Allow users to download generated music
+- **Push Notifications**: Background reminders when app is not running
+- **Enhanced Email Features**: More sophisticated email templates and scheduling
 
 ## Development
 
