@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Switch, Button, Alert, Modal, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 import DataExportModal from '../components/DataExportModal';
 import EmailNotificationSettings from '../components/EmailNotificationSettings';
+import PushNotificationSettings from '../components/PushNotificationSettings';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
 import NotificationService from '../services/NotificationService';
 import MoodEntryService from '../services/MoodEntryService';
+import { AntDesign } from '@expo/vector-icons';
 
 const SettingsScreen = () => {
   // State for modals
@@ -16,6 +18,10 @@ const SettingsScreen = () => {
   // State for time range inputs
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('21:00');
+  
+  // State for accordion open/close
+  const [emailAccordionOpen, setEmailAccordionOpen] = useState(false);
+  const [pushAccordionOpen, setPushAccordionOpen] = useState(false);
   
   // Use demo user for web compatibility
   const userId = 'demo-user';
@@ -247,8 +253,29 @@ const SettingsScreen = () => {
         />
       </View>
 
-      {/* Email Notifications Section */}
-      <EmailNotificationSettings />
+      {/* Email Notifications Section (Accordion) */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          onPress={() => setEmailAccordionOpen((open) => !open)}
+        >
+          <Text style={styles.sectionTitle}>Email Notifications</Text>
+          <AntDesign name={emailAccordionOpen ? 'up' : 'down'} size={20} color="#333" />
+        </TouchableOpacity>
+        {emailAccordionOpen && <EmailNotificationSettings />}
+      </View>
+
+      {/* Push Notifications Section (Accordion) */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          onPress={() => setPushAccordionOpen((open) => !open)}
+        >
+          <Text style={styles.sectionTitle}>Push Notifications</Text>
+          <AntDesign name={pushAccordionOpen ? 'up' : 'down'} size={20} color="#333" />
+        </TouchableOpacity>
+        {pushAccordionOpen && <PushNotificationSettings />}
+      </View>
       
       {/* Appearance Section */}
       <View style={styles.section}>
@@ -547,6 +574,13 @@ const styles = StyleSheet.create({
   },
   buttonSpacer: {
     width: 20,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
   },
 });
 

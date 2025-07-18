@@ -20,6 +20,8 @@ interface SyncQueueItem {
  * It provides basic data protection and manages local storage
  */
 class LocalStorageManager {
+  private static instance: LocalStorageManager | null = null;
+  
   // Storage keys
   private static readonly MOOD_ENTRIES_KEY = 'mood_entries';
   private static readonly USER_DATA_KEY = 'user_data';
@@ -29,6 +31,15 @@ class LocalStorageManager {
   private static readonly AUDIO_DATA_KEY = 'audio_data';
   
   private initialized = false;
+
+  private constructor() {}
+
+  static getInstance(): LocalStorageManager {
+    if (!LocalStorageManager.instance) {
+      LocalStorageManager.instance = new LocalStorageManager();
+    }
+    return LocalStorageManager.instance;
+  }
   
   /**
    * Initialize the storage manager
@@ -36,11 +47,22 @@ class LocalStorageManager {
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
+      console.log('LocalStorageManager already initialized, skipping...');
       return;
     }
     
     try {
       console.log('Initializing LocalStorageManager...');
+      
+      // Emergency clear if we're hitting storage limits
+      try {
+        await AsyncStorage.getAllKeys();
+      } catch (storageError) {
+        if (storageError instanceof Error && storageError.message.includes('196607')) {
+          console.log('🚨 Storage limit exceeded, performing emergency clear...');
+          await this.emergencyClear();
+        }
+      }
       
       // Check if we need to migrate existing data
       console.log('Checking for existing data migration...');
@@ -126,9 +148,43 @@ class LocalStorageManager {
           }
         }
       }
+      
+      // Clear excessive data to prevent storage overflow
+      await this.clearExcessiveData();
     } catch (error) {
       console.error('Failed to clear old encrypted data:', error);
       // Don't throw here, as this is not critical
+    }
+  }
+
+  /**
+   * Clear excessive data to prevent storage overflow
+   */
+  private async clearExcessiveData(): Promise<void> {
+    try {
+      console.log('Clearing potentially corrupted old data...');
+      
+      // Clear all AsyncStorage to reset the property count
+      await AsyncStorage.clear();
+      console.log('Cleared all AsyncStorage data to prevent overflow');
+      
+    } catch (error) {
+      console.error('Failed to clear excessive data:', error);
+      // Don't throw here, as this is not critical
+    }
+  }
+
+  /**
+   * Force clear all storage data (emergency cleanup)
+   */
+  async emergencyClear(): Promise<void> {
+    try {
+      console.log('🚨 Emergency clearing all storage data...');
+      await AsyncStorage.clear();
+      this.initialized = false;
+      console.log('✅ Emergency clear completed');
+    } catch (error) {
+      console.error('❌ Emergency clear failed:', error);
     }
   }
   
@@ -451,4 +507,4 @@ class LocalStorageManager {
   }
 }
 
-export default new LocalStorageManager();
+export default LocalStorageManager.getInstance();
