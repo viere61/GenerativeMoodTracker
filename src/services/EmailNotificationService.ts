@@ -28,10 +28,8 @@ class EmailNotificationService {
   private isInitialized: boolean = false;
 
   constructor() {
-    // Use localhost for development, change to your deployed backend URL for production
-    this.baseUrl = __DEV__ 
-      ? 'http://localhost:3001/api'
-      : 'https://generativemoodtracker-production.up.railway.app/api';
+    // Always use the deployed Railway backend for now
+    this.baseUrl = 'https://generativemoodtracker-production.up.railway.app/api';
   }
 
   async initialize(): Promise<void> {
