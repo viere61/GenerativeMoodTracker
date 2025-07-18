@@ -155,22 +155,34 @@ const HomeScreen = () => {
       // Check for automatic email reminders
       const checkEmailReminders = async () => {
         try {
+          console.log('🏠 HomeScreen: Starting email reminder check...');
+          
           // Get email settings
           const emailSettings = await UserPreferencesService.getEmailNotificationSettings('demo-user');
+          console.log('🏠 HomeScreen: Email settings:', emailSettings);
           
           if (emailSettings?.enabled && emailSettings?.autoRemindersEnabled) {
+            console.log('🏠 HomeScreen: Email notifications enabled and auto-reminders enabled');
+            
             // Get mood entries to check if user has logged today
             const moodEntries = await MoodEntryService.getMoodEntries('demo-user');
+            console.log('🏠 HomeScreen: Mood entries count:', moodEntries?.length || 0);
             
             // Check and send automatic reminder
-            await emailNotificationService.checkAndSendAutoReminder(
+            console.log('🏠 HomeScreen: Calling checkAndSendAutoReminder...');
+            const result = await emailNotificationService.checkAndSendAutoReminder(
               emailSettings.userEmail,
               emailSettings.userName || 'User',
               moodEntries
             );
+            console.log('🏠 HomeScreen: Auto-reminder result:', result);
+          } else {
+            console.log('🏠 HomeScreen: Email notifications or auto-reminders disabled');
+            console.log('🏠 HomeScreen: enabled:', emailSettings?.enabled);
+            console.log('🏠 HomeScreen: autoRemindersEnabled:', emailSettings?.autoRemindersEnabled);
           }
         } catch (error) {
-          console.error('Error checking email reminders:', error);
+          console.error('🏠 HomeScreen: Error checking email reminders:', error);
         }
       };
       

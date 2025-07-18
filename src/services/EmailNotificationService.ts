@@ -1,10 +1,13 @@
 import { Platform } from 'react-native';
+import UserPreferencesService from './UserPreferencesService';
+import LocalStorageManager from './LocalStorageManager';
 
 export interface EmailNotificationSettings {
   enabled: boolean;
   userEmail: string;
   userName: string;
   autoRemindersEnabled: boolean; // New: automatic reminders when app opens
+  preferredTimeRange?: { start: string; end: string }; // User's preferred time window
   weeklyReportEnabled: boolean;
   weeklyReportDay: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 }
@@ -192,28 +195,62 @@ class EmailNotificationService {
     });
   }
 
-  // Check if we should send a reminder (within 1-hour window)
-  shouldSendReminder(): boolean {
+  // Check if we should send a reminder (within user's preferred time window)
+  async shouldSendReminder(): Promise<boolean> {
     const now = new Date();
-    const hour = now.getHours();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
     
-    // Send reminder between 9 AM and 10 PM (reasonable hours)
-    return hour >= 9 && hour < 22;
+    // Get user's preferred time window from settings
+    const settings = await this.getStoredSettings();
+    if (!settings) {
+      // Fallback to reasonable hours if no settings
+      return currentHour >= 9 && currentHour < 22;
+    }
+    
+    // Parse user's preferred time window
+    const [startHour, startMinute] = settings.preferredTimeRange?.start?.split(':').map(Number) || [21, 0];
+    const [endHour, endMinute] = settings.preferredTimeRange?.end?.split(':').map(Number) || [22, 0];
+    
+    const startTimeInMinutes = startHour * 60 + startMinute;
+    const endTimeInMinutes = endHour * 60 + endMinute;
+    
+    console.log(`📧 Time check: current=${currentTimeInMinutes}, window=${startTimeInMinutes}-${endTimeInMinutes}`);
+    
+    // Check if current time is within the preferred window
+    return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
   }
 
   // Check if we already sent a reminder today
   hasSentReminderToday(): boolean {
-    const lastReminderDate = localStorage.getItem('last_reminder_date');
-    if (!lastReminderDate) return false;
-    
-    const today = new Date().toDateString();
-    return lastReminderDate === today;
+    try {
+      const lastReminderDate = Platform.OS === 'web' 
+        ? localStorage.getItem('last_reminder_date')
+        : null; // For mobile, we'll use a different approach
+      
+      if (!lastReminderDate) return false;
+      
+      const today = new Date().toDateString();
+      return lastReminderDate === today;
+    } catch (error) {
+      console.error('❌ Error checking reminder date:', error);
+      return false;
+    }
   }
 
   // Mark that we sent a reminder today
   markReminderSent(): void {
-    const today = new Date().toDateString();
-    localStorage.setItem('last_reminder_date', today);
+    try {
+      const today = new Date().toDateString();
+      if (Platform.OS === 'web') {
+        localStorage.setItem('last_reminder_date', today);
+      }
+      // For mobile, we'll rely on the backend to prevent duplicates
+      console.log('📧 Marked reminder as sent for today:', today);
+    } catch (error) {
+      console.error('❌ Error marking reminder sent:', error);
+    }
   }
 
   // Automatic reminder when app opens
@@ -223,27 +260,42 @@ class EmailNotificationService {
     moodEntries: any[]
   ): Promise<EmailNotificationResponse> {
     try {
+      console.log('📧 Starting automatic reminder check...');
+      console.log('📧 User email:', userEmail);
+      console.log('📧 Mood entries count:', moodEntries?.length || 0);
+      
       // Check if auto-reminders are enabled
-      const settings = this.getStoredSettings();
+      const settings = await this.getStoredSettings();
+      console.log('📧 Email settings:', settings);
+      
       if (!settings?.autoRemindersEnabled) {
         console.log('📧 Auto-reminders disabled');
         return { success: false, error: 'Auto-reminders disabled' };
       }
 
       // Check if user has already logged mood today
-      if (this.hasLoggedMoodToday(moodEntries)) {
+      const hasLoggedToday = this.hasLoggedMoodToday(moodEntries);
+      console.log('📧 Has logged mood today:', hasLoggedToday);
+      
+      if (hasLoggedToday) {
         console.log('📧 User already logged mood today, no reminder needed');
         return { success: false, error: 'Already logged today' };
       }
 
       // Check if we should send reminder (time window)
-      if (!this.shouldSendReminder()) {
+      const shouldSend = await this.shouldSendReminder();
+      console.log('📧 Should send reminder (time window):', shouldSend);
+      
+      if (!shouldSend) {
         console.log('📧 Outside reminder time window');
         return { success: false, error: 'Outside time window' };
       }
 
       // Check if we already sent a reminder today
-      if (this.hasSentReminderToday()) {
+      const alreadySent = this.hasSentReminderToday();
+      console.log('📧 Already sent reminder today:', alreadySent);
+      
+      if (alreadySent) {
         console.log('📧 Already sent reminder today');
         return { success: false, error: 'Already sent today' };
       }
@@ -255,6 +307,8 @@ class EmailNotificationService {
       if (result.success) {
         this.markReminderSent();
         console.log('📧 Automatic reminder sent successfully');
+      } else {
+        console.log('📧 Failed to send automatic reminder:', result.error);
       }
       
       return result;
@@ -267,11 +321,31 @@ class EmailNotificationService {
     }
   }
 
-  // Get stored settings from localStorage
-  private getStoredSettings(): EmailNotificationSettings | null {
+  // Get stored settings from LocalStorageManager (same as UserPreferencesService)
+  private async getStoredSettings(): Promise<EmailNotificationSettings | null> {
     try {
-      const settings = localStorage.getItem('email_notification_settings');
-      return settings ? JSON.parse(settings) : null;
+      // Use LocalStorageManager to get the settings (same as UserPreferencesService)
+      const settings = await LocalStorageManager.retrieveData<EmailNotificationSettings>('emailNotificationSettings');
+      
+      if (settings) {
+        console.log('📧 EmailNotificationService: Found settings in LocalStorageManager:', settings);
+        
+        // Get time preferences from UserPreferencesService
+        try {
+          const userPreferences = await UserPreferencesService.getPreferences('demo-user');
+          if (userPreferences && settings) {
+            settings.preferredTimeRange = userPreferences.preferredTimeRange;
+            console.log('📧 EmailNotificationService: Added time preferences:', settings.preferredTimeRange);
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not get user preferences for time range:', error);
+        }
+        
+        return settings;
+      }
+      
+      console.log('📧 EmailNotificationService: No settings found in LocalStorageManager');
+      return null;
     } catch (error) {
       console.error('❌ Error reading stored settings:', error);
       return null;

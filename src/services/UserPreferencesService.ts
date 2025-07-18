@@ -1,5 +1,6 @@
 import { User } from '../types';
 import StorageService from './StorageService';
+import LocalStorageManager from './LocalStorageManager';
 
 // Keys for secure storage
 const USER_PREFERENCES_KEY = 'user_preferences';
@@ -174,14 +175,34 @@ class UserPreferencesService {
    */
   async getEmailNotificationSettings(userId: string): Promise<any> {
     try {
-      const key = `emailNotificationSettings_${userId}`;
-      const settingsData = await StorageService.getItem(key);
+      // Use LocalStorageManager to get the settings (same as how they're saved)
+      const settings = await LocalStorageManager.retrieveData('emailNotificationSettings');
       
-      if (!settingsData) {
-        return null;
+      if (settings) {
+        console.log('📧 Found email settings in LocalStorageManager:', settings);
+        return settings;
       }
       
-      return JSON.parse(settingsData);
+      // Fallback: try StorageService as well
+      const key = 'emailNotificationSettings';
+      const settingsData = await StorageService.getItem(key);
+      
+      if (settingsData) {
+        console.log('📧 Found email settings in StorageService');
+        return JSON.parse(settingsData);
+      }
+      
+      // Fallback to the user-specific key
+      const userKey = `emailNotificationSettings_${userId}`;
+      const userSettingsData = await StorageService.getItem(userKey);
+      
+      if (userSettingsData) {
+        console.log('📧 Found email settings in user-specific key');
+        return JSON.parse(userSettingsData);
+      }
+      
+      console.log('📧 No email settings found in any storage location');
+      return null;
     } catch (error) {
       console.error('Get email notification settings error:', error);
       return null;
