@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Switch, Button, Alert, Modal, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 import DataExportModal from '../components/DataExportModal';
+import EmailNotificationSettings from '../components/EmailNotificationSettings';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
 import NotificationService from '../services/NotificationService';
@@ -245,6 +246,9 @@ const SettingsScreen = () => {
           disabled={!(preferences?.notifications ?? true)}
         />
       </View>
+
+      {/* Email Notifications Section */}
+      <EmailNotificationSettings />
       
       {/* Appearance Section */}
       <View style={styles.section}>
