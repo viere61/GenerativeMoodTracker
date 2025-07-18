@@ -3,6 +3,7 @@ import { generateUUID } from '../utils/uuid';
 import StorageService from './StorageService';
 import WebStorageService from './WebStorageService';
 import MusicGenerationService from './MusicGenerationService';
+import LocalStorageManager from './LocalStorageManager';
 
 // Check if we're running on web
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -25,6 +26,17 @@ class MoodEntryService {
     emotionTags: string[] = [],
     reflection: string = ''
   ): Promise<MoodEntry> {
+    // Ensure LocalStorageManager is initialized for mobile
+    if (!isWeb) {
+      try {
+        console.log('Initializing LocalStorageManager for saveMoodEntry...');
+        await LocalStorageManager.initialize();
+        console.log('LocalStorageManager initialized successfully for saveMoodEntry');
+      } catch (error) {
+        console.error('Failed to initialize LocalStorageManager:', error);
+        // Continue without encryption if initialization fails
+      }
+    }
     // Validate inputs
     if (moodRating < 1 || moodRating > 10) {
       throw new Error('Mood rating must be between 1 and 10');
@@ -52,8 +64,8 @@ class MoodEntryService {
       if (isWeb) {
         await WebStorageService.storeMoodEntries(userId, updatedEntries);
       } else {
-        const key = `mood_entries_${userId}`;
-        await StorageService.setItem(key, JSON.stringify(updatedEntries));
+        // Use LocalStorageManager for storage on mobile
+        await LocalStorageManager.storeMoodEntries(userId, updatedEntries);
       }
       
       // Trigger music generation asynchronously
@@ -73,17 +85,24 @@ class MoodEntryService {
    */
   async getMoodEntries(userId: string): Promise<MoodEntry[]> {
     try {
+      // Ensure LocalStorageManager is initialized for mobile
+      if (!isWeb) {
+        try {
+          console.log('Initializing LocalStorageManager for getMoodEntries...');
+          await LocalStorageManager.initialize();
+          console.log('LocalStorageManager initialized successfully for getMoodEntries');
+        } catch (error) {
+          console.error('Failed to initialize LocalStorageManager:', error);
+          // Continue without encryption if initialization fails
+        }
+      }
+      
       if (isWeb) {
         return await WebStorageService.retrieveMoodEntries(userId);
       } else {
-        const key = `mood_entries_${userId}`;
-        const entriesData = await StorageService.getItem(key);
-        
-        if (!entriesData) {
-          return [];
-        }
-        
-        return JSON.parse(entriesData) as MoodEntry[];
+        // Use LocalStorageManager for storage on mobile
+        const entries = await LocalStorageManager.retrieveMoodEntries(userId);
+        return entries || [];
       }
     } catch (error) {
       console.error('Error retrieving mood entries:', error);
@@ -145,8 +164,12 @@ class MoodEntryService {
       return entryDate.getTime() !== todayTimestamp;
     });
 
-    const key = `mood_entries_${userId}`;
-    await StorageService.setItem(key, JSON.stringify(filtered));
+    // Use LocalStorageManager for storage on mobile
+    if (isWeb) {
+      await WebStorageService.storeMoodEntries(userId, filtered);
+    } else {
+      await LocalStorageManager.storeMoodEntries(userId, filtered);
+    }
   }
 
   /**
@@ -179,8 +202,8 @@ class MoodEntryService {
         if (isWeb) {
           await WebStorageService.storeMoodEntries(userId, updatedEntries);
         } else {
-          const key = `mood_entries_${userId}`;
-          await StorageService.setItem(key, JSON.stringify(updatedEntries));
+          // Use LocalStorageManager for storage on mobile
+          await LocalStorageManager.storeMoodEntries(userId, updatedEntries);
         }
         
         console.log('Mood entry updated with music ID:', generatedMusic.musicId);

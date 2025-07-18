@@ -101,7 +101,7 @@ const MoodEntryScreen = () => {
           },
           { 
             text: "OK", 
-            onPress: () => navigation.navigate('Home')
+            onPress: () => navigation.navigate('Main', { screen: 'Home' })
           }
         ]
       );

@@ -168,12 +168,12 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         Animated.timing(animation, {
           toValue: 1,
           duration: 500,
-          useNativeDriver: true,
+          useNativeDriver: false, // FIX: height animation not supported by native driver
         }),
         Animated.timing(animation, {
           toValue: 0,
           duration: 500,
-          useNativeDriver: true,
+          useNativeDriver: false, // FIX: height animation not supported by native driver
         }),
       ])
     ).start();

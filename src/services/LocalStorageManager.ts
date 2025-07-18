@@ -16,567 +16,438 @@ interface SyncQueueItem {
 }
 
 /**
- * LocalStorageManager handles secure storage operations for the application
- * It provides encryption for sensitive data and manages local storage
+ * LocalStorageManager handles storage operations for the application
+ * It provides basic data protection and manages local storage
  */
 class LocalStorageManager {
   // Storage keys
-  private static readonly ENCRYPTION_KEY = 'encryption_key';
   private static readonly MOOD_ENTRIES_KEY = 'mood_entries';
   private static readonly USER_DATA_KEY = 'user_data';
   private static readonly DAILY_WINDOW_KEY = 'daily_window';
   private static readonly GENERATED_MUSIC_KEY = 'generated_music';
   private static readonly SYNC_QUEUE_KEY = 'sync_queue';
+  private static readonly AUDIO_DATA_KEY = 'audio_data';
+  
+  private initialized = false;
   
   /**
    * Initialize the storage manager
    * This should be called when the app starts
    */
   async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+    
     try {
-      // Check if encryption key exists, if not create one
-      const encryptionKey = await SecureStore.getItemAsync(LocalStorageManager.ENCRYPTION_KEY);
-      if (!encryptionKey) {
-        await this.generateAndStoreEncryptionKey();
-      }
+      console.log('Initializing LocalStorageManager...');
+      
+      // Check if we need to migrate existing data
+      console.log('Checking for existing data migration...');
+      await this.migrateExistingData();
+      
+      this.initialized = true;
+      console.log('LocalStorageManager initialized successfully');
     } catch (error) {
       console.error('Failed to initialize LocalStorageManager:', error);
-      throw new Error('Storage initialization failed');
+      // Don't throw error, continue without encryption
+      this.initialized = true;
     }
   }
-  
+
   /**
-   * Generate and store a new encryption key
-   * @returns The generated encryption key
+   * Migrate existing data if needed
    */
-  private async generateAndStoreEncryptionKey(): Promise<string> {
+  private async migrateExistingData(): Promise<void> {
     try {
-      // Generate a random encryption key
-      const randomBytes = Array.from(new Uint8Array(32))
-        .map(() => Math.floor(Math.random() * 256));
+      // Clear any old encrypted data that might cause issues
+      await this.clearOldEncryptedData();
       
-      const encryptionKey = randomBytes
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-      
-      // Store the encryption key securely
-      await SecureStore.setItemAsync(LocalStorageManager.ENCRYPTION_KEY, encryptionKey);
-      
-      return encryptionKey;
-    } catch (error) {
-      console.error('Failed to generate encryption key:', error);
-      throw new Error('Encryption key generation failed');
-    }
-  }
-  
-  /**
-   * Get the stored encryption key
-   * @returns The encryption key
-   */
-  private async getEncryptionKey(): Promise<string> {
-    const key = await SecureStore.getItemAsync(LocalStorageManager.ENCRYPTION_KEY);
-    if (!key) {
-      throw new Error('Encryption key not found');
-    }
-    return key;
-  }
-  
-  /**
-   * Encrypt data using the stored encryption key
-   * @param data The data to encrypt
-   * @returns The encrypted data
-   */
-  private async encrypt(data: string): Promise<string> {
-    try {
-      const encryptionKey = await this.getEncryptionKey();
-      
-      // In a real app, we would use a proper encryption algorithm
-      // For this implementation, we'll use a simple XOR encryption with the key
-      // combined with a hash for integrity
-      
-      // Create a hash of the original data for integrity checking
-      const dataHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        data
-      );
-      
-      // Prepare data with hash
-      const dataWithHash = `${data}|${dataHash}`;
-      
-      // XOR encrypt the data with the key
-      const encrypted = this.xorEncrypt(dataWithHash, encryptionKey);
-      
-      // Return base64 encoded encrypted data
-      return btoa(encrypted);
-    } catch (error) {
-      console.error('Encryption failed:', error);
-      throw new Error('Data encryption failed');
-    }
-  }
-  
-  /**
-   * Decrypt data using the stored encryption key
-   * @param encryptedData The encrypted data
-   * @returns The decrypted data
-   */
-  private async decrypt(encryptedData: string): Promise<string> {
-    try {
-      const encryptionKey = await this.getEncryptionKey();
-      
-      // Decode from base64
-      const encrypted = atob(encryptedData);
-      
-      // XOR decrypt
-      const decrypted = this.xorEncrypt(encrypted, encryptionKey);
-      
-      // Split data and hash
-      const [data, storedHash] = decrypted.split('|');
-      
-      // Verify integrity
-      const calculatedHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        data
-      );
-      
-      if (calculatedHash !== storedHash) {
-        throw new Error('Data integrity check failed');
+      // Check for existing mood entries in different formats
+      const existingMoodEntries = await AsyncStorage.getItem(LocalStorageManager.MOOD_ENTRIES_KEY);
+      if (existingMoodEntries) {
+        console.log('Found existing mood entries, migrating...');
+        
+        try {
+          // Parse the existing data
+          const entries = JSON.parse(existingMoodEntries);
+          
+          // Store in new format
+          await this.storeData(LocalStorageManager.MOOD_ENTRIES_KEY, entries, false);
+          
+          console.log('Successfully migrated existing mood entries');
+        } catch (parseError) {
+          console.log('Failed to parse existing mood entries - likely old encrypted data, clearing...');
+          await this.removeData(LocalStorageManager.MOOD_ENTRIES_KEY);
+        }
       }
-      
-      return data;
     } catch (error) {
-      console.error('Decryption failed:', error);
-      throw new Error('Data decryption failed');
+      console.error('Failed to migrate existing data:', error);
+      // Don't throw here, as this is not critical for app functionality
+    }
+  }
+
+  /**
+   * Clear any old encrypted data that might cause issues
+   */
+  private async clearOldEncryptedData(): Promise<void> {
+    try {
+      // Get all keys from AsyncStorage
+      const keys = await AsyncStorage.getAllKeys();
+      
+      // Look for keys that might contain old encrypted data
+      const keysToClear = keys.filter(key => 
+        key.includes('mood_entries') || 
+        key.includes('user_data') || 
+        key.includes('generated_music') ||
+        key.includes('daily_window')
+      );
+      
+      if (keysToClear.length > 0) {
+        console.log('Clearing potentially corrupted old data...');
+        
+        for (const key of keysToClear) {
+          try {
+            const data = await AsyncStorage.getItem(key);
+            if (data) {
+              // Try to parse as JSON
+              JSON.parse(data);
+              // If it parses successfully, keep it
+              console.log('Keeping valid data for key:', key);
+            } else {
+              // If it's null or empty, remove it
+              await AsyncStorage.removeItem(key);
+              console.log('Removed empty data for key:', key);
+            }
+          } catch (parseError) {
+            // If parsing fails, it's likely old encrypted data, so remove it
+            await AsyncStorage.removeItem(key);
+            console.log('Removed old encrypted data for key:', key);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to clear old encrypted data:', error);
+      // Don't throw here, as this is not critical
     }
   }
   
   /**
-   * Simple XOR encryption/decryption
-   * @param text Text to encrypt/decrypt
-   * @param key Encryption key
-   * @returns Encrypted/decrypted text
+   * Simple data obfuscation for basic protection
+   * @param data The data to obfuscate
+   * @returns The obfuscated data
    */
-  private xorEncrypt(text: string, key: string): string {
+  private obfuscateData(data: string): string {
+    // Simple XOR with a fixed key for basic obfuscation
+    const key = 'moodtracker2024';
     let result = '';
-    for (let i = 0; i < text.length; i++) {
-      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-      result += String.fromCharCode(charCode);
+    for (let i = 0; i < data.length; i++) {
+      result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
     }
     return result;
   }
   
   /**
-   * Store data securely
-   * @param key Storage key
-   * @param data Data to store
-   * @param useEncryption Whether to encrypt the data
+   * De-obfuscate data
+   * @param obfuscatedData The obfuscated data
+   * @returns The original data
    */
-  async storeData(key: string, data: any, useEncryption: boolean = true): Promise<void> {
+  private deobfuscateData(obfuscatedData: string): string {
+    // XOR with the same key to de-obfuscate
+    const key = 'moodtracker2024';
+    let result = '';
+    for (let i = 0; i < obfuscatedData.length; i++) {
+      result += String.fromCharCode(obfuscatedData.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return result;
+  }
+
+  /**
+   * Store data with optional obfuscation
+   * @param key The storage key
+   * @param data The data to store
+   * @param useObfuscation Whether to obfuscate the data
+   */
+  async storeData(key: string, data: any, useObfuscation: boolean = false): Promise<void> {
     try {
       const jsonData = JSON.stringify(data);
+      const dataToStore = useObfuscation ? this.obfuscateData(jsonData) : jsonData;
       
-      if (useEncryption) {
-        // Encrypt and store in SecureStore for sensitive data
-        const encryptedData = await this.encrypt(jsonData);
-        await SecureStore.setItemAsync(key, encryptedData);
-      } else {
-        // Store in AsyncStorage for non-sensitive data
-        await AsyncStorage.setItem(key, jsonData);
-      }
+      await AsyncStorage.setItem(key, dataToStore);
     } catch (error) {
-      console.error(`Failed to store data for key ${key}:`, error);
+      console.error('Failed to store data for key', key, ':', error);
       throw new Error('Data storage failed');
     }
   }
-  
+
   /**
-   * Retrieve stored data
-   * @param key Storage key
-   * @param useEncryption Whether the data is encrypted
+   * Retrieve data with optional de-obfuscation
+   * @param key The storage key
+   * @param useObfuscation Whether the data was obfuscated
    * @returns The retrieved data
    */
-  async retrieveData<T>(key: string, useEncryption: boolean = true): Promise<T | null> {
+  async retrieveData<T>(key: string, useObfuscation: boolean = false): Promise<T | null> {
     try {
-      let jsonData: string | null;
-      
-      if (useEncryption) {
-        // Retrieve from SecureStore and decrypt
-        const encryptedData = await SecureStore.getItemAsync(key);
-        if (!encryptedData) {
-          return null;
-        }
-        jsonData = await this.decrypt(encryptedData);
-      } else {
-        // Retrieve from AsyncStorage
-        jsonData = await AsyncStorage.getItem(key);
-        if (!jsonData) {
-          return null;
-        }
+      const storedData = await AsyncStorage.getItem(key);
+      if (!storedData) {
+        return null;
       }
       
-      return JSON.parse(jsonData) as T;
+      // Try to parse as JSON first (for new format)
+      try {
+        const jsonData = useObfuscation ? this.deobfuscateData(storedData) : storedData;
+        return JSON.parse(jsonData);
+      } catch (parseError) {
+        // If parsing fails, it might be old encrypted data, so return null
+        console.log('Failed to parse data for key', key, '- likely old encrypted data, clearing...');
+        await this.removeData(key);
+        return null;
+      }
     } catch (error) {
-      console.error(`Failed to retrieve data for key ${key}:`, error);
+      console.error('Failed to retrieve data for key', key, ':', error);
       return null;
     }
   }
-  
+
   /**
-   * Remove stored data
-   * @param key Storage key
-   * @param useEncryption Whether the data is encrypted
+   * Remove data from storage
+   * @param key The storage key
    */
-  async removeData(key: string, useEncryption: boolean = true): Promise<void> {
+  async removeData(key: string): Promise<void> {
     try {
-      if (useEncryption) {
-        await SecureStore.deleteItemAsync(key);
-      } else {
-        await AsyncStorage.removeItem(key);
-      }
+      await AsyncStorage.removeItem(key);
     } catch (error) {
-      console.error(`Failed to remove data for key ${key}:`, error);
+      console.error('Failed to remove data for key', key, ':', error);
       throw new Error('Data removal failed');
     }
   }
-  
-  // User data specific methods
-  
+
   /**
    * Store user data
-   * @param user User data to store
+   * @param user The user data to store
    */
   async storeUserData(user: User): Promise<void> {
-    const key = `${LocalStorageManager.USER_DATA_KEY}_${user.userId}`;
-    await this.storeData(key, user, true);
-    
-    // Add to sync queue
-    await this.addToSyncQueue({
-      type: 'user_preferences',
-      action: 'update',
-      data: {
-        userId: user.userId,
-        preferredTimeRange: user.preferredTimeRange,
-        settings: user.settings
-      },
-      timestamp: Date.now()
-    });
+    await this.storeData(`${LocalStorageManager.USER_DATA_KEY}_${user.userId}`, user, false);
   }
-  
+
   /**
    * Retrieve user data
-   * @param userId User ID
+   * @param userId The user ID
    * @returns The user data
    */
   async retrieveUserData(userId: string): Promise<User | null> {
-    const key = `${LocalStorageManager.USER_DATA_KEY}_${userId}`;
-    return await this.retrieveData<User>(key, true);
+    return await this.retrieveData<User>(`${LocalStorageManager.USER_DATA_KEY}_${userId}`, false);
   }
-  
+
   /**
    * Update user data
-   * @param userId User ID
-   * @param updates Updates to apply
+   * @param userId The user ID
+   * @param updates The updates to apply
    */
   async updateUserData(userId: string, updates: Partial<User>): Promise<void> {
-    try {
-      // Get existing user data
-      const userData = await this.retrieveUserData(userId);
-      
-      if (!userData) {
-        throw new Error('User data not found');
-      }
-      
-      // Update user data
-      const updatedUserData = { ...userData, ...updates };
-      
-      // Store updated user data
-      await this.storeUserData(updatedUserData);
-    } catch (error) {
-      console.error('Failed to update user data:', error);
-      throw new Error('User data update failed');
+    const existingUser = await this.retrieveUserData(userId);
+    if (existingUser) {
+      const updatedUser = { ...existingUser, ...updates };
+      await this.storeUserData(updatedUser);
     }
   }
-  
-  // Mood Entry specific methods
-  
+
   /**
    * Store mood entries for a user
-   * @param userId User ID
-   * @param entries Mood entries to store
+   * @param userId The user ID
+   * @param entries The mood entries to store
    */
   async storeMoodEntries(userId: string, entries: MoodEntry[]): Promise<void> {
-    const key = `${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`;
-    await this.storeData(key, entries, true);
+    await this.storeData(`${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`, entries, false);
   }
-  
+
   /**
    * Retrieve mood entries for a user
-   * @param userId User ID
-   * @returns The user's mood entries
+   * @param userId The user ID
+   * @returns The mood entries
    */
   async retrieveMoodEntries(userId: string): Promise<MoodEntry[]> {
-    const key = `${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`;
-    return await this.retrieveData<MoodEntry[]>(key, true) || [];
+    const entries = await this.retrieveData<MoodEntry[]>(`${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`, false);
+    return entries || [];
   }
-  
+
   /**
-   * Store a single mood entry for a user
-   * @param userId User ID
-   * @param entry Mood entry to store
+   * Store a single mood entry
+   * @param userId The user ID
+   * @param entry The mood entry to store
    */
   async storeMoodEntry(userId: string, entry: MoodEntry): Promise<void> {
-    try {
-      // Get existing entries
-      const entries = await this.retrieveMoodEntries(userId);
-      
-      // Add new entry
-      const updatedEntries = [...entries, entry];
-      
-      // Store updated entries
-      await this.storeMoodEntries(userId, updatedEntries);
-      
-      // Add to sync queue
-      await this.addToSyncQueue({
-        type: 'mood_entry',
-        action: 'create',
-        data: entry,
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error('Failed to store mood entry:', error);
-      throw new Error('Mood entry storage failed');
+    const entries = await this.retrieveMoodEntries(userId);
+    const existingIndex = entries.findIndex(e => e.entryId === entry.entryId);
+    
+    if (existingIndex >= 0) {
+      entries[existingIndex] = entry;
+    } else {
+      entries.push(entry);
     }
+    
+    await this.storeMoodEntries(userId, entries);
   }
-  
+
   /**
    * Update a mood entry
-   * @param userId User ID
-   * @param entryId Entry ID to update
-   * @param updatedEntry Updated entry data
+   * @param userId The user ID
+   * @param entryId The entry ID
+   * @param updatedEntry The updated entry data
    */
   async updateMoodEntry(userId: string, entryId: string, updatedEntry: Partial<MoodEntry>): Promise<void> {
-    try {
-      // Get existing entries
-      const entries = await this.retrieveMoodEntries(userId);
-      
-      // Find and update the entry
-      const updatedEntries = entries.map(entry => 
-        entry.entryId === entryId ? { ...entry, ...updatedEntry } : entry
-      );
-      
-      // Store updated entries
-      await this.storeMoodEntries(userId, updatedEntries);
-      
-      // Add to sync queue
-      await this.addToSyncQueue({
-        type: 'mood_entry',
-        action: 'update',
-        data: { entryId, ...updatedEntry },
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error('Failed to update mood entry:', error);
-      throw new Error('Mood entry update failed');
+    const entries = await this.retrieveMoodEntries(userId);
+    const entryIndex = entries.findIndex(e => e.entryId === entryId);
+    
+    if (entryIndex >= 0) {
+      entries[entryIndex] = { ...entries[entryIndex], ...updatedEntry };
+      await this.storeMoodEntries(userId, entries);
     }
   }
-  
+
   /**
    * Delete a mood entry
-   * @param userId User ID
-   * @param entryId Entry ID to delete
+   * @param userId The user ID
+   * @param entryId The entry ID
    */
   async deleteMoodEntry(userId: string, entryId: string): Promise<void> {
-    try {
-      // Get existing entries
-      const entries = await this.retrieveMoodEntries(userId);
-      
-      // Filter out the entry to delete
-      const updatedEntries = entries.filter(entry => entry.entryId !== entryId);
-      
-      // Store updated entries
-      await this.storeMoodEntries(userId, updatedEntries);
-      
-      // Add to sync queue
-      await this.addToSyncQueue({
-        type: 'mood_entry',
-        action: 'delete',
-        data: { entryId },
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error('Failed to delete mood entry:', error);
-      throw new Error('Mood entry deletion failed');
-    }
+    const entries = await this.retrieveMoodEntries(userId);
+    const filteredEntries = entries.filter(e => e.entryId !== entryId);
+    await this.storeMoodEntries(userId, filteredEntries);
   }
-  
-  // Daily window specific methods
-  
+
   /**
-   * Store daily window for a user
-   * @param userId User ID
-   * @param window Daily window to store
+   * Store daily window data
+   * @param userId The user ID
+   * @param window The daily window data
    */
   async storeDailyWindow(userId: string, window: DailyWindow): Promise<void> {
-    const key = `${LocalStorageManager.DAILY_WINDOW_KEY}_${userId}`;
-    await this.storeData(key, window, true);
-    
-    // Add to sync queue
-    await this.addToSyncQueue({
-      type: 'daily_window',
-      action: 'update',
-      data: window,
-      timestamp: Date.now()
-    });
+    await this.storeData(`${LocalStorageManager.DAILY_WINDOW_KEY}_${userId}`, window, false);
   }
-  
+
   /**
-   * Retrieve daily window for a user
-   * @param userId User ID
-   * @returns The user's daily window
+   * Retrieve daily window data
+   * @param userId The user ID
+   * @returns The daily window data
    */
   async retrieveDailyWindow(userId: string): Promise<DailyWindow | null> {
-    const key = `${LocalStorageManager.DAILY_WINDOW_KEY}_${userId}`;
-    return await this.retrieveData<DailyWindow>(key, true);
+    return await this.retrieveData<DailyWindow>(`${LocalStorageManager.DAILY_WINDOW_KEY}_${userId}`, false);
   }
-  
-  // Generated music specific methods
-  
+
   /**
    * Store generated music
-   * @param userId User ID
-   * @param music Generated music to store
+   * @param userId The user ID
+   * @param music The generated music data
    */
   async storeGeneratedMusic(userId: string, music: GeneratedMusic): Promise<void> {
-    const key = `${LocalStorageManager.GENERATED_MUSIC_KEY}_${userId}_${music.musicId}`;
-    await this.storeData(key, music, true);
+    const allMusic = await this.retrieveAllGeneratedMusic(userId);
+    const existingIndex = allMusic.findIndex(m => m.musicId === music.musicId);
     
-    // Add to sync queue
-    await this.addToSyncQueue({
-      type: 'generated_music',
-      action: 'create',
-      data: music,
-      timestamp: Date.now()
-    });
+    if (existingIndex >= 0) {
+      allMusic[existingIndex] = music;
+    } else {
+      allMusic.push(music);
+    }
+    
+    await this.storeData(`${LocalStorageManager.GENERATED_MUSIC_KEY}_${userId}`, allMusic, false);
   }
-  
+
   /**
-   * Retrieve generated music
-   * @param userId User ID
-   * @param musicId Music ID
-   * @returns The generated music
+   * Retrieve generated music by ID
+   * @param userId The user ID
+   * @param musicId The music ID
+   * @returns The generated music data
    */
   async retrieveGeneratedMusic(userId: string, musicId: string): Promise<GeneratedMusic | null> {
-    const key = `${LocalStorageManager.GENERATED_MUSIC_KEY}_${userId}_${musicId}`;
-    return await this.retrieveData<GeneratedMusic>(key, true);
+    const allMusic = await this.retrieveAllGeneratedMusic(userId);
+    return allMusic.find(m => m.musicId === musicId) || null;
   }
-  
+
   /**
    * Retrieve all generated music for a user
-   * @param userId User ID
-   * @returns All generated music for the user
+   * @param userId The user ID
+   * @returns Array of generated music
    */
   async retrieveAllGeneratedMusic(userId: string): Promise<GeneratedMusic[]> {
-    try {
-      // Note: SecureStore doesn't support getAllKeys(), so we need to maintain an index
-      // For now, we'll return an empty array since we don't have a proper index
-      // In a real implementation, we would maintain a separate index of music IDs
-      console.warn('retrieveAllGeneratedMusic: Not fully implemented - SecureStore limitation');
-      return [];
-    } catch (error) {
-      console.error('Failed to retrieve all generated music:', error);
-      return [];
-    }
+    const music = await this.retrieveData<GeneratedMusic[]>(`${LocalStorageManager.GENERATED_MUSIC_KEY}_${userId}`, false);
+    return music || [];
   }
-  
-  // Sync queue methods
-  
+
   /**
-   * Add an item to the sync queue
-   * @param item Item to add to the queue
+   * Store audio data (base64 encoded)
+   * @param musicId The music ID
+   * @param audioData The base64 audio data
+   */
+  async storeAudioData(musicId: string, audioData: string): Promise<void> {
+    await this.storeData(`${LocalStorageManager.AUDIO_DATA_KEY}_${musicId}`, audioData, false);
+  }
+
+  /**
+   * Retrieve audio data
+   * @param musicId The music ID
+   * @returns The base64 audio data
+   */
+  async retrieveAudioData(musicId: string): Promise<string | null> {
+    return await this.retrieveData<string>(`${LocalStorageManager.AUDIO_DATA_KEY}_${musicId}`, false);
+  }
+
+  /**
+   * Add item to sync queue
+   * @param item The sync queue item
    */
   private async addToSyncQueue(item: SyncQueueItem): Promise<void> {
-    try {
-      // Generate a unique ID for the queue item
-      const queueItem = {
-        ...item,
-        id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        retryCount: 0
-      };
-      
-      // Get current queue
-      const queue = await this.getSyncQueue();
-      
-      // Add item to queue
-      queue.push(queueItem);
-      
-      // Store updated queue
-      await this.storeSyncQueue(queue);
-    } catch (error) {
-      console.error('Failed to add item to sync queue:', error);
-    }
+    const queue = await this.getSyncQueue();
+    queue.push(item);
+    await this.storeSyncQueue(queue);
   }
-  
+
   /**
-   * Get the current sync queue
-   * @returns The sync queue
+   * Get sync queue
+   * @returns Array of sync queue items
    */
   async getSyncQueue(): Promise<SyncQueueItem[]> {
-    return await this.retrieveData<SyncQueueItem[]>(LocalStorageManager.SYNC_QUEUE_KEY, true) || [];
+    const queue = await this.retrieveData<SyncQueueItem[]>(LocalStorageManager.SYNC_QUEUE_KEY, false);
+    return queue || [];
   }
-  
+
   /**
-   * Store the sync queue
-   * @param queue Queue to store
+   * Store sync queue
+   * @param queue The sync queue to store
    */
   private async storeSyncQueue(queue: SyncQueueItem[]): Promise<void> {
-    await this.storeData(LocalStorageManager.SYNC_QUEUE_KEY, queue, true);
+    await this.storeData(LocalStorageManager.SYNC_QUEUE_KEY, queue, false);
   }
-  
+
   /**
-   * Remove an item from the sync queue
-   * @param itemId ID of the item to remove
+   * Remove item from sync queue
+   * @param itemId The item ID to remove
    */
   async removeFromSyncQueue(itemId: string): Promise<void> {
-    try {
-      // Get current queue
-      const queue = await this.getSyncQueue();
-      
-      // Remove item
-      const updatedQueue = queue.filter(item => item.id !== itemId);
-      
-      // Store updated queue
-      await this.storeSyncQueue(updatedQueue);
-    } catch (error) {
-      console.error('Failed to remove item from sync queue:', error);
-    }
+    const queue = await this.getSyncQueue();
+    const filteredQueue = queue.filter(item => item.id !== itemId);
+    await this.storeSyncQueue(filteredQueue);
   }
-  
+
   /**
-   * Update an item in the sync queue
-   * @param itemId ID of the item to update
-   * @param updates Updates to apply
+   * Update sync queue item
+   * @param itemId The item ID
+   * @param updates The updates to apply
    */
   async updateSyncQueueItem(itemId: string, updates: Partial<SyncQueueItem>): Promise<void> {
-    try {
-      // Get current queue
-      const queue = await this.getSyncQueue();
-      
-      // Update item
-      const updatedQueue = queue.map(item => 
-        item.id === itemId ? { ...item, ...updates } : item
-      );
-      
-      // Store updated queue
-      await this.storeSyncQueue(updatedQueue);
-    } catch (error) {
-      console.error('Failed to update sync queue item:', error);
+    const queue = await this.getSyncQueue();
+    const itemIndex = queue.findIndex(item => item.id === itemId);
+    
+    if (itemIndex >= 0) {
+      queue[itemIndex] = { ...queue[itemIndex], ...updates };
+      await this.storeSyncQueue(queue);
     }
   }
-  
+
   /**
-   * Clear the entire sync queue
+   * Clear sync queue
    */
   async clearSyncQueue(): Promise<void> {
-    await this.storeSyncQueue([]);
+    await this.removeData(LocalStorageManager.SYNC_QUEUE_KEY);
   }
 }
 
