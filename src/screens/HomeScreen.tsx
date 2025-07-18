@@ -10,6 +10,8 @@ import TimeWindowCountdown from '../components/TimeWindowCountdown';
 import { formatTimeForDisplay } from '../utils/timeWindow';
 import UserPreferencesService from '../services/UserPreferencesService';
 import MusicDebugPanel from '../components/MusicDebugPanel';
+import emailNotificationService from '../services/EmailNotificationService';
+import MoodEntryService from '../services/MoodEntryService';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -149,6 +151,30 @@ const HomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       checkTimeWindow();
+      
+      // Check for automatic email reminders
+      const checkEmailReminders = async () => {
+        try {
+          // Get email settings
+          const emailSettings = await UserPreferencesService.getEmailNotificationSettings('demo-user');
+          
+          if (emailSettings?.enabled && emailSettings?.autoRemindersEnabled) {
+            // Get mood entries to check if user has logged today
+            const moodEntries = await MoodEntryService.getMoodEntries('demo-user');
+            
+            // Check and send automatic reminder
+            await emailNotificationService.checkAndSendAutoReminder(
+              emailSettings.userEmail,
+              emailSettings.userName || 'User',
+              moodEntries
+            );
+          }
+        } catch (error) {
+          console.error('Error checking email reminders:', error);
+        }
+      };
+      
+      checkEmailReminders();
     }, [checkTimeWindow])
   );
   

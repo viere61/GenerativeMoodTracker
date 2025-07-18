@@ -4,8 +4,7 @@ export interface EmailNotificationSettings {
   enabled: boolean;
   userEmail: string;
   userName: string;
-  reminderFrequency: 'daily' | 'weekly' | 'never';
-  reminderTime: string; // HH:MM format
+  autoRemindersEnabled: boolean; // New: automatic reminders when app opens
   weeklyReportEnabled: boolean;
   weeklyReportDay: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 }
@@ -177,6 +176,106 @@ class EmailNotificationService {
     const diffTime = Math.abs(now.getTime() - lastEntryDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  }
+
+  // Check if user has logged a mood today
+  hasLoggedMoodToday(moodEntries: any[]): boolean {
+    if (!moodEntries || moodEntries.length === 0) return false;
+    
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    
+    return moodEntries.some(entry => {
+      const entryDate = new Date(entry.timestamp);
+      return entryDate >= todayStart && entryDate < todayEnd;
+    });
+  }
+
+  // Check if we should send a reminder (within 1-hour window)
+  shouldSendReminder(): boolean {
+    const now = new Date();
+    const hour = now.getHours();
+    
+    // Send reminder between 9 AM and 10 PM (reasonable hours)
+    return hour >= 9 && hour < 22;
+  }
+
+  // Check if we already sent a reminder today
+  hasSentReminderToday(): boolean {
+    const lastReminderDate = localStorage.getItem('last_reminder_date');
+    if (!lastReminderDate) return false;
+    
+    const today = new Date().toDateString();
+    return lastReminderDate === today;
+  }
+
+  // Mark that we sent a reminder today
+  markReminderSent(): void {
+    const today = new Date().toDateString();
+    localStorage.setItem('last_reminder_date', today);
+  }
+
+  // Automatic reminder when app opens
+  async checkAndSendAutoReminder(
+    userEmail: string,
+    userName: string,
+    moodEntries: any[]
+  ): Promise<EmailNotificationResponse> {
+    try {
+      // Check if auto-reminders are enabled
+      const settings = this.getStoredSettings();
+      if (!settings?.autoRemindersEnabled) {
+        console.log('📧 Auto-reminders disabled');
+        return { success: false, error: 'Auto-reminders disabled' };
+      }
+
+      // Check if user has already logged mood today
+      if (this.hasLoggedMoodToday(moodEntries)) {
+        console.log('📧 User already logged mood today, no reminder needed');
+        return { success: false, error: 'Already logged today' };
+      }
+
+      // Check if we should send reminder (time window)
+      if (!this.shouldSendReminder()) {
+        console.log('📧 Outside reminder time window');
+        return { success: false, error: 'Outside time window' };
+      }
+
+      // Check if we already sent a reminder today
+      if (this.hasSentReminderToday()) {
+        console.log('📧 Already sent reminder today');
+        return { success: false, error: 'Already sent today' };
+      }
+
+      // Send the reminder
+      console.log('📧 Sending automatic mood reminder...');
+      const result = await this.sendMoodReminder(userEmail, userName, 0);
+      
+      if (result.success) {
+        this.markReminderSent();
+        console.log('📧 Automatic reminder sent successfully');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error in auto-reminder check:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Get stored settings from localStorage
+  private getStoredSettings(): EmailNotificationSettings | null {
+    try {
+      const settings = localStorage.getItem('email_notification_settings');
+      return settings ? JSON.parse(settings) : null;
+    } catch (error) {
+      console.error('❌ Error reading stored settings:', error);
+      return null;
+    }
   }
 
   // Helper method to generate mood stats for weekly reports

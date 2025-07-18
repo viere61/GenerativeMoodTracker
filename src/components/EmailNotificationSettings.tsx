@@ -26,8 +26,7 @@ const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps> = ({
     enabled: false,
     userEmail: '',
     userName: '',
-    reminderFrequency: 'daily',
-    reminderTime: '09:00',
+    autoRemindersEnabled: true,
     weeklyReportEnabled: false,
     weeklyReportDay: 'monday'
   });
@@ -176,32 +175,20 @@ const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps> = ({
               />
             </View>
 
-            {/* Reminder Frequency */}
-            <View style={styles.pickerContainer}>
-              <Text style={styles.inputLabel}>Reminder Frequency</Text>
-              <View style={styles.pickerWrapper}>
-                <TextInput
-                  style={styles.textInput}
-                  value={settings.reminderFrequency}
-                  onChangeText={(value: string) => handleSettingChange('reminderFrequency', value as 'daily' | 'weekly' | 'never')}
-                  placeholder="daily, weekly, or never"
-                />
-              </View>
+            {/* Auto Reminders */}
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Automatic Reminders</Text>
+              <Switch
+                value={settings.autoRemindersEnabled}
+                onValueChange={(value) => handleSettingChange('autoRemindersEnabled', value)}
+                trackColor={{ false: '#767577', true: '#81b0ff' }}
+                thumbColor={settings.autoRemindersEnabled ? '#f5dd4b' : '#f4f3f4'}
+              />
             </View>
-
-            {/* Reminder Time */}
-            {settings.reminderFrequency !== 'never' && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Reminder Time</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={settings.reminderTime}
-                  onChangeText={(value) => handleSettingChange('reminderTime', value)}
-                  placeholder="HH:MM (e.g., 09:00)"
-                  keyboardType="numeric"
-                />
-              </View>
-            )}
+            
+            <Text style={styles.helpText}>
+              When enabled, you'll receive a gentle reminder to log your mood when you open the app (if you haven't logged today yet).
+            </Text>
 
             {/* Weekly Report Settings */}
             <View style={styles.settingRow}>
@@ -396,6 +383,13 @@ const styles = StyleSheet.create({
     color: '#1976d2',
     lineHeight: 20,
     marginBottom: 8,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 20,
+    fontStyle: 'italic',
   },
 });
 

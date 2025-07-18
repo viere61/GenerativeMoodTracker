@@ -166,6 +166,27 @@ class UserPreferencesService {
     
     return startMinutes < endMinutes;
   }
+
+  /**
+   * Get email notification settings
+   * @param userId The user's ID
+   * @returns Promise resolving to email notification settings
+   */
+  async getEmailNotificationSettings(userId: string): Promise<any> {
+    try {
+      const key = `emailNotificationSettings_${userId}`;
+      const settingsData = await StorageService.getItem(key);
+      
+      if (!settingsData) {
+        return null;
+      }
+      
+      return JSON.parse(settingsData);
+    } catch (error) {
+      console.error('Get email notification settings error:', error);
+      return null;
+    }
+  }
 }
 
 export default new UserPreferencesService();
