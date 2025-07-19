@@ -9,7 +9,7 @@ export const API_CONFIG = {
   // ElevenLabs API Configuration (Recommended)
   ELEVENLABS: {
     // Get your API key from: https://elevenlabs.io/
-    API_KEY: 'sk_a8dc817712d334c201220401a0a947f55894775f41882d28',
+    API_KEY: 'YOUR_ELEVENLABS_API_KEY_HERE',
     
     // API request settings
     TIMEOUT: 30000, // 30 seconds
@@ -29,7 +29,7 @@ export const API_CONFIG = {
   // Hugging Face API Configuration (Legacy - not working)
   HUGGING_FACE: {
     // Get your token from: https://huggingface.co/settings/tokens
-    API_TOKEN: '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',
+    API_TOKEN: 'YOUR_HUGGINGFACE_TOKEN_HERE',
     
     // API request settings
     TIMEOUT: 30000, // 30 seconds
