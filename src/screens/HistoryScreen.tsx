@@ -33,6 +33,15 @@ const HistoryScreen = () => {
     loadMoodEntries();
   }, []);
 
+  // Set up periodic refresh to catch music generation updates
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      loadMoodEntries();
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, []);
+
   // Load mood entries from the service
   const loadMoodEntries = async () => {
     setIsLoading(true);
@@ -272,6 +281,12 @@ const HistoryScreen = () => {
         <Text style={styles.title}>Mood History</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={loadMoodEntries}
+          >
+            <Ionicons name="refresh" size={20} color="#555" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.exportButton}
             onPress={() => setExportModalVisible(true)}
           >
@@ -348,6 +363,14 @@ const styles = StyleSheet.create({
   },
   headerButtons: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    backgroundColor: '#e0e0e0',
+    padding: 8,
+    borderRadius: 20,
+    marginRight: 10,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   exportButton: {

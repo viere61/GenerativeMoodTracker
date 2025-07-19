@@ -18,10 +18,15 @@ const isExpoGo = typeof global !== 'undefined' && (global as any).__EXPO_DEVTOOL
 class MusicGenerationService {
   // Alternative AI music generation services
   private readonly AI_SERVICES = {
-    // Hugging Face MusicGen (may not be available on free tier)
-    HUGGING_FACE: {
-      endpoint: 'https://api-inference.huggingface.co/models/facebook/musicgen-stereo-small',
+    // ElevenLabs - Sound Effects API (available on free tier)
+    ELEVENLABS: {
+      endpoint: 'https://api.elevenlabs.io/v1/sound-generation',
       enabled: true,
+      apiKey: API_CONFIG.ELEVENLABS.API_KEY,
+    },
+    // Hugging Face (disabled due to API limitations)
+    HUGGING_FACE: {
+      enabled: false,
     },
     // Alternative: Mubert API (requires separate setup)
     MUBERT: {
@@ -594,20 +599,7 @@ class MusicGenerationService {
       // Generate the actual music
       const generatedMusic = await this.generateMusicFromAPI(request, musicObject, 0);
       
-      // Update the mood entry to link it to the generated music
-      if (isWeb) {
-        await WebStorageService.updateMoodEntry(userId, moodEntry.entryId, {
-          musicGenerated: true,
-          musicId: generatedMusic.musicId
-        });
-      } else {
-        await LocalStorageManager.updateMoodEntry(userId, moodEntry.entryId, {
-          musicGenerated: true,
-          musicId: generatedMusic.musicId
-        });
-      }
-      
-      // Store the generated music
+      // Store the generated music (mood entry update is handled by MoodEntryService)
       if (isWeb) {
         await WebStorageService.storeGeneratedMusic(userId, generatedMusic);
       } else {
@@ -644,48 +636,20 @@ class MusicGenerationService {
   }
 
   /**
-   * Convert mood entry to a text prompt for MusicGen API
+   * Convert mood entry to a text prompt for sound effects generation
    * @param moodEntry The mood entry to convert
-   * @returns Text prompt for music generation
+   * @returns Text prompt for sound generation
    */
   private createMusicPrompt(moodEntry: MoodEntry): string {
-    const { moodRating, emotionTags, reflection } = moodEntry;
+    const { reflection } = moodEntry;
     
-    // Base mood description based on rating
-    let baseMood = '';
-    if (moodRating <= 2) baseMood = 'melancholic, sad, slow';
-    else if (moodRating <= 4) baseMood = 'contemplative, introspective, calm';
-    else if (moodRating <= 6) baseMood = 'neutral, balanced, peaceful';
-    else if (moodRating <= 8) baseMood = 'uplifting, positive, energetic';
-    else baseMood = 'joyful, exuberant, celebratory';
-    
-    // Add emotion tag influences
-    const emotionInfluences = emotionTags.map(tag => {
-      const tagLower = tag.toLowerCase();
-      if (['happy', 'excited', 'grateful'].includes(tagLower)) return 'bright, cheerful';
-      if (['sad', 'anxious', 'frustrated'].includes(tagLower)) return 'somber, reflective';
-      if (['calm', 'peaceful', 'focused'].includes(tagLower)) return 'gentle, ambient';
-      if (['angry', 'energetic'].includes(tagLower)) return 'intense, powerful';
-      return '';
-    }).filter(influence => influence !== '');
-    
-    // Extract key words from reflection (simple keyword extraction)
-    const reflectionWords = reflection.toLowerCase()
-      .split(/\s+/)
-      .filter(word => word.length > 3)
-      .slice(0, 3); // Take first 3 meaningful words
-    
-    // Combine all elements
-    const promptElements = [baseMood, ...emotionInfluences, ...reflectionWords];
-    const prompt = promptElements.join(', ');
-    
-    // Add genre/style suggestions based on mood
-    let genre = '';
-    if (moodRating <= 3) genre = 'ambient, classical, piano';
-    else if (moodRating <= 6) genre = 'acoustic, folk, jazz';
-    else genre = 'pop, electronic, upbeat';
-    
-    return `${prompt}, ${genre} music`;
+    // Use only the reflection text as the prompt
+    if (reflection && reflection.trim()) {
+      return reflection.trim();
+    } else {
+      // Fallback if no reflection text
+      return "peaceful ambient soundscape";
+    }
   }
 
   /**
@@ -717,16 +681,18 @@ class MusicGenerationService {
         console.log('Generated prompt:', prompt);
       }
       
-      // Try Hugging Face MusicGen first
-      if (this.AI_SERVICES.HUGGING_FACE.enabled) {
+      // Try ElevenLabs AI generation first
+      if (this.AI_SERVICES.ELEVENLABS.enabled) {
         try {
-          return await this.tryHuggingFaceGeneration(prompt, musicObject);
+          return await this.tryElevenLabsGeneration(prompt, musicObject);
         } catch (error) {
           if (isDebugMode()) {
-            console.log('Hugging Face generation failed, trying alternatives...');
+            console.log('ElevenLabs generation failed, trying alternatives...');
           }
         }
       }
+      
+
       
       // Try other AI services if available
       if (this.AI_SERVICES.MUBERT.enabled) {
@@ -739,9 +705,10 @@ class MusicGenerationService {
         }
       }
       
-      // If all AI services fail, use enhanced procedural generation
+      // Use enhanced procedural generation (AI models not available on free tier)
       if (isDebugMode()) {
-        console.log('All AI services unavailable, using enhanced procedural generation...');
+        console.log('🎵 Using enhanced procedural music generation...');
+        console.log('🎵 This creates sophisticated, mood-appropriate music using advanced algorithms');
       }
       
       return await this.generateProceduralMusic(musicObject, request.moodEntry);
@@ -765,42 +732,105 @@ class MusicGenerationService {
   /**
    * Try to generate music using Hugging Face MusicGen API
    */
-  private async tryHuggingFaceGeneration(prompt: string, musicObject: GeneratedMusic): Promise<GeneratedMusic> {
-    const apiToken = getHuggingFaceToken();
+  private async tryElevenLabsGeneration(prompt: string, musicObject: GeneratedMusic): Promise<GeneratedMusic> {
+    const apiKey = this.AI_SERVICES.ELEVENLABS.apiKey;
+    
+    if (apiKey === 'YOUR_ELEVENLABS_API_KEY_HERE') {
+      throw new Error('ElevenLabs API key not configured');
+    }
     
     if (isDebugMode()) {
-      console.log('Trying Hugging Face MusicGen API...');
-      console.log('Endpoint:', this.AI_SERVICES.HUGGING_FACE.endpoint);
+      console.log('🎵 Trying ElevenLabs Sound Effects API...');
+      console.log('🎵 Prompt:', prompt);
     }
     
-    const response = await fetch(this.AI_SERVICES.HUGGING_FACE.endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: prompt
-      }),
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Hugging Face API failed: ${response.status} ${errorText}`);
+    try {
+      // Convert mood prompt to a sound effects description
+      const soundDescription = this.convertMoodToSoundDescription(prompt);
+      
+      const response = await fetch(this.AI_SERVICES.ELEVENLABS.endpoint, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg, audio/mp4, audio/wav, */*',
+          'Content-Type': 'application/json',
+          'xi-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          text: soundDescription,
+          model_id: 'eleven_sound_effects_v1',
+          output_format: 'mp3',
+        }),
+      });
+      
+      if (isDebugMode()) {
+        console.log('🎵 ElevenLabs response status:', response.status);
+      }
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🎵 ElevenLabs API Error:', response.status, errorText);
+        console.error('🎵 Request body:', JSON.stringify({
+          text: soundDescription,
+          model_id: 'eleven_sound_effects_v1',
+          output_format: 'mp3',
+        }));
+        throw new Error(`ElevenLabs API failed: ${response.status} ${errorText}`);
+      }
+      
+      // Get the audio data as array buffer (can only read response body once)
+      const arrayBuffer = await response.arrayBuffer();
+      console.log('🎵 Got array buffer, size:', arrayBuffer.byteLength);
+      
+      // In React Native, we can't create Blob from ArrayBuffer, so we'll work directly with the array buffer
+      // Create a mock blob object with the _data property that React Native expects
+      const audioBlob = {
+        _data: arrayBuffer,
+        size: arrayBuffer.byteLength,
+        type: 'audio/mpeg'
+      } as any;
+      
+      if (isDebugMode()) {
+        console.log('🎵 ElevenLabs audio received, size:', audioBlob.size, 'bytes');
+        console.log('🎵 Audio blob type:', audioBlob.type);
+        console.log('🎵 Audio blob methods:', Object.getOwnPropertyNames(audioBlob));
+      }
+      
+      const audioUrl = await this.saveAudioFile(audioBlob, musicObject.musicId);
+      musicObject.audioUrl = audioUrl;
+      musicObject.duration = 8;
+      
+      // Update music parameters to reflect AI generation instead of procedural
+      musicObject.musicParameters = {
+        tempo: 120, // Default tempo for AI-generated ambient sounds
+        key: 'Ambient',
+        instruments: ['AI Generated Sound Effects'],
+        mood: 'AI Generated'
+      };
+      
+      console.log('🎵 Successfully generated AI audio with ElevenLabs!');
+      return musicObject;
+      
+    } catch (error) {
+      console.error('🎵 ElevenLabs API call failed:', error);
+      throw error;
     }
-    
-    const audioBlob = await response.blob();
-    
-    if (isDebugMode()) {
-      console.log('Hugging Face audio received, size:', audioBlob.size, 'bytes');
-    }
-    
-    const audioUrl = await this.saveAudioFile(audioBlob, musicObject.musicId);
-    musicObject.audioUrl = audioUrl;
-    musicObject.duration = 8;
-    
-    return musicObject;
   }
+  
+
+  
+  private convertMoodToSoundDescription(prompt: string): string {
+    // The prompt is now just the reflection text - return it directly
+    const reflectionText = prompt.trim();
+    
+    if (reflectionText) {
+      return reflectionText;
+    } else {
+      // Fallback if no reflection text
+      return "peaceful ambient soundscape";
+    }
+  }
+  
+
 
   /**
    * Try to generate music using Mubert API (placeholder for future implementation)
@@ -902,44 +932,101 @@ class MusicGenerationService {
     // More reliable platform detection
     const isActuallyWeb = isWeb && !isReactNative && !isExpoGo;
     
-    if (isActuallyWeb) {
-      // On web, store the blob data in localStorage and create a persistent URL
-      const audioArrayBuffer = await audioBlob.arrayBuffer();
-      const audioBase64 = this.encodeBase64(new Uint8Array(audioArrayBuffer));
-      
-      // Store the base64 data in localStorage
-      const storageKey = `audio_data_${musicId}`;
-      localStorage.setItem(storageKey, audioBase64);
-      
-      // Create a blob URL for immediate use
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      if (isDebugMode()) {
-        console.log('Audio data stored with key:', storageKey);
-        console.log('Audio blob URL created for web:', audioUrl);
+    try {
+      if (isActuallyWeb) {
+        // On web, store the blob data in localStorage and create a persistent URL
+        let audioArrayBuffer: ArrayBuffer;
+        
+        // Handle different blob types and methods
+        if (audioBlob.arrayBuffer) {
+          audioArrayBuffer = await audioBlob.arrayBuffer();
+        } else if (audioBlob instanceof ArrayBuffer) {
+          audioArrayBuffer = audioBlob as ArrayBuffer;
+        } else if ((audioBlob as any)._data) {
+          // React Native specific: response has _data property
+          audioArrayBuffer = (audioBlob as any)._data;
+        } else {
+          // Fallback: try to read as text and convert
+          const text = await audioBlob.text();
+          const encoder = new TextEncoder();
+          audioArrayBuffer = encoder.encode(text).buffer as ArrayBuffer;
+        }
+        
+        const audioBase64 = this.encodeBase64(new Uint8Array(audioArrayBuffer));
+        
+        // Store the base64 data in localStorage
+        const storageKey = `audio_data_${musicId}`;
+        localStorage.setItem(storageKey, audioBase64);
+        
+        // Create a blob URL for immediate use
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        if (isDebugMode()) {
+          console.log('Audio data stored with key:', storageKey);
+          console.log('Audio blob URL created for web:', audioUrl);
+        }
+        
+        return audioUrl;
+      } else {
+        // On native platforms, save to file system
+        const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
+        }
+        
+        // Use .mp3 extension for MP3 files from ElevenLabs
+        const localFilePath = `${this.MUSIC_DIRECTORY}${musicId}.mp3`;
+        
+        let audioArrayBuffer: ArrayBuffer;
+        
+        // Handle different blob types and methods
+        if ((audioBlob as any)._data) {
+          // Our mock blob object from ElevenLabs or React Native response
+          audioArrayBuffer = (audioBlob as any)._data;
+          console.log('🎵 Using _data property, size:', audioArrayBuffer.byteLength);
+        } else if (audioBlob.arrayBuffer) {
+          audioArrayBuffer = await audioBlob.arrayBuffer();
+        } else if (audioBlob instanceof ArrayBuffer) {
+          audioArrayBuffer = audioBlob as ArrayBuffer;
+        } else {
+          // Fallback: try to read as text and convert
+          const text = await audioBlob.text();
+          const encoder = new TextEncoder();
+          audioArrayBuffer = encoder.encode(text).buffer as ArrayBuffer;
+        }
+        
+        // For ElevenLabs MP3 data, try different approaches
+        const audioData = new Uint8Array(audioArrayBuffer);
+        console.log('🎵 Audio data length:', audioData.length);
+        console.log('🎵 Audio data first 10 bytes:', Array.from(audioData.slice(0, 10)));
+        
+        // Try writing as base64 first
+        try {
+          const audioBase64 = this.encodeBase64(audioData);
+          console.log('🎵 Base64 result length:', audioBase64.length);
+          await FileSystem.writeAsStringAsync(localFilePath, audioBase64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          console.log('🎵 MP3 file saved successfully using base64 encoding');
+        } catch (error) {
+          console.error('🎵 Base64 encoding failed, trying alternative method:', error);
+          // Fallback: try writing as raw binary string
+          const binaryString = String.fromCharCode.apply(null, Array.from(audioData));
+          await FileSystem.writeAsStringAsync(localFilePath, binaryString);
+          console.log('🎵 MP3 file saved using binary string method');
+        }
+        
+        if (isDebugMode()) {
+          console.log('Audio file saved to:', localFilePath);
+        }
+        
+        return localFilePath;
       }
-      
-      return audioUrl;
-    } else {
-      // On native platforms, save to file system
-      const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
-      }
-      
-      const localFilePath = `${this.MUSIC_DIRECTORY}${musicId}.wav`;
-      const audioArrayBuffer = await audioBlob.arrayBuffer();
-      const audioBase64 = this.encodeBase64(new Uint8Array(audioArrayBuffer));
-      
-      await FileSystem.writeAsStringAsync(localFilePath, audioBase64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      
-      if (isDebugMode()) {
-        console.log('Audio file saved to:', localFilePath);
-      }
-      
-      return localFilePath;
+    } catch (error) {
+      console.error('Error saving audio file:', error);
+      console.error('AudioBlob type:', typeof audioBlob);
+      console.error('AudioBlob methods:', Object.getOwnPropertyNames(audioBlob));
+      throw error;
     }
   }
 

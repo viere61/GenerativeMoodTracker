@@ -102,6 +102,12 @@ class MoodEntryService {
       } else {
         // Use LocalStorageManager for storage on mobile
         const entries = await LocalStorageManager.retrieveMoodEntries(userId);
+        console.log('📱 Retrieved mood entries:', entries?.length || 0, 'entries');
+        if (entries && entries.length > 0) {
+          entries.forEach(entry => {
+            console.log('📱 Entry:', entry.entryId, 'musicGenerated:', entry.musicGenerated, 'musicId:', entry.musicId);
+          });
+        }
         return entries || [];
       }
     } catch (error) {
@@ -192,11 +198,17 @@ class MoodEntryService {
         
         // Update the mood entry to mark music as generated
         const entries = await this.getMoodEntries(userId);
+        console.log('🔄 Before update - entries count:', entries.length);
+        
         const updatedEntries = entries.map(entry => 
           entry.entryId === moodEntry.entryId 
             ? { ...entry, musicGenerated: true, musicId: generatedMusic.musicId }
             : entry
         );
+        
+        console.log('🔄 After update - entries count:', updatedEntries.length);
+        const updatedEntry = updatedEntries.find(entry => entry.entryId === moodEntry.entryId);
+        console.log('🔄 Updated entry:', updatedEntry?.entryId, 'musicGenerated:', updatedEntry?.musicGenerated, 'musicId:', updatedEntry?.musicId);
         
         // Save updated entries using appropriate storage service
         if (isWeb) {
@@ -206,7 +218,7 @@ class MoodEntryService {
           await LocalStorageManager.storeMoodEntries(userId, updatedEntries);
         }
         
-        console.log('Mood entry updated with music ID:', generatedMusic.musicId);
+        console.log('✅ Mood entry updated with music ID:', generatedMusic.musicId);
       } else {
         console.log('Music generation failed or was queued');
       }

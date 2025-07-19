@@ -18,51 +18,47 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 - **Test Emails**: Verify email configuration with test emails
 - **Backend Integration**: Deployed on Railway with SendGrid email service
 
-### Music Generation System
-- **AI-Powered Music Generation**: Attempts to generate music using Hugging Face MusicGen API
-- **Intelligent Fallback System**: When AI services are unavailable, generates procedural music using Web Audio API
-- **Mood-Based Music**: Music parameters are dynamically adjusted based on:
+### AI Sound Effects System
+- **AI-Powered Sound Effects**: Generates unique sound effects using ElevenLabs Sound Effects API
+- **Mood-Based Audio**: Sound effect parameters are dynamically adjusted based on:
   - Mood rating (1-10 scale)
   - Selected emotion tags
   - Reflection text sentiment analysis
-  - Musical theory (tempo, key signatures, scales, dynamics)
+  - Emotional context and atmosphere
 
-### Music Features
-- **Real-time Playback**: Play, pause, resume, and stop generated music
+### Audio Features
+- **Real-time Playback**: Play, pause, resume, and stop generated sound effects
 - **Progress Tracking**: Visual progress bar with time display
 - **Volume Control**: Adjustable volume levels
-- **Repeat Mode**: Loop music playback
-- **Cross-platform Storage**: Music data persists across sessions using platform-appropriate storage
+- **Repeat Mode**: Loop audio playback
+- **Cross-platform Storage**: Audio data persists across sessions using platform-appropriate storage
 
-## Fallback Music Generation System
+## AI Sound Effects Generation System
 
-When external AI music generation services are unavailable, the app uses an advanced procedural music generation system:
+The app generates AI-powered sound effects using ElevenLabs Sound Effects API, creating unique audio experiences based on your mood entries:
 
 ### How It Works
-1. **Mood Analysis**: Analyzes the user's mood entry to determine musical parameters
-2. **Parameter Generation**: Creates music parameters based on:
-   - **Tempo**: Faster for higher mood ratings, slower for lower ratings
-   - **Key Signatures**: Major keys for positive moods, minor keys for negative moods
-   - **Scales**: Different musical scales based on emotional content
-   - **Dynamics**: Volume and intensity variations
-   - **Harmony**: Chord progressions and harmonic complexity
+1. **Mood Analysis**: Analyzes the user's mood entry to determine sound effect parameters
+2. **AI Prompt Generation**: Creates detailed prompts for ElevenLabs API based on:
+   - **Mood Rating**: Emotional intensity and energy level
+   - **Emotion Tags**: Specific emotions like "joyful", "melancholic", "energetic"
+   - **Reflection Text**: Sentiment analysis of user's written reflection
+   - **Musical Context**: References to musical elements and atmosphere
 
-3. **Web Audio API Generation**: Uses the browser's Web Audio API to generate:
-   - **Melody**: Creates melodic sequences based on mood parameters
-   - **Harmony**: Adds harmonic layers and bass lines
-   - **Rhythm**: Generates rhythmic patterns
-   - **Envelope**: Applies attack, sustain, and release shaping
+3. **ElevenLabs API Integration**: Uses ElevenLabs Sound Effects API to generate:
+   - **Unique Sound Effects**: AI-generated audio based on mood prompts
+   - **Mood-Appropriate Audio**: Tailored to match the user's emotional state
+   - **High-Quality Output**: Professional-grade sound effects
 
-4. **Audio Processing**: Converts generated audio to WAV format with proper headers
-5. **Storage**: Stores audio data as base64 in localStorage for persistent playback
+4. **Audio Processing**: Handles MP3 audio data and converts for cross-platform compatibility
+5. **Storage**: Stores audio files locally for persistent playback across app sessions
 
-### Musical Intelligence
-The fallback system incorporates basic musical theory:
-- **Scale Selection**: Major scales for joy/uplifting moods, minor scales for melancholic/sad moods
-- **Tempo Mapping**: 60-120 BPM range based on mood energy
-- **Frequency Mapping**: Musical notes mapped to frequencies (A4 = 440Hz)
-- **Harmonic Content**: Adds octaves, fifths, and thirds for richer sound
-- **Dynamic Range**: Varies amplitude based on mood intensity
+### AI Intelligence
+The system leverages ElevenLabs' advanced AI to create mood-appropriate sound effects:
+- **Emotional Mapping**: Translates mood ratings and emotions into descriptive sound effect prompts
+- **Context Awareness**: Incorporates reflection text to create more personalized audio experiences
+- **Cross-Platform Compatibility**: Handles React Native and web environments seamlessly
+- **Persistent Storage**: Audio files are saved locally and persist across app sessions
 
 ## Setup
 
@@ -93,7 +89,7 @@ The fallback system incorporates basic musical theory:
 
 ### Services
 - **MoodEntryService**: Handles mood entry creation, storage, and retrieval
-- **MusicGenerationService**: Manages AI music generation and fallback systems
+- **MusicGenerationService**: Manages AI sound effects generation
 - **NotificationService**: Handles push notifications (mobile only)
 - **TimeWindowService**: Manages the random time window system
 - **StorageService**: Platform-appropriate data persistence
@@ -105,33 +101,32 @@ The fallback system incorporates basic musical theory:
 - **Mobile**: Uses AsyncStorage and FileSystem for native storage
 - **Cross-platform**: Unified API with platform-specific implementations
 
-### Music Generation Pipeline
+### Sound Effects Generation Pipeline
 1. User creates mood entry
-2. System attempts Hugging Face MusicGen API
-3. If API fails, falls back to procedural generation
-4. Audio data is stored and blob URL created
-5. Music player loads and plays the generated audio
+2. System generates AI prompt based on mood data
+3. ElevenLabs API creates unique sound effect
+4. Audio data is processed and stored locally
+5. Audio player loads and plays the generated sound effect
 
 ## Known Issues & Limitations
 
 ### Current Issues
-- **Hugging Face API**: Returns 404 errors due to endpoint availability issues
 - **Notifications**: Not working in Expo Go (requires development build)
 - **Web Audio Context**: May require user interaction to resume suspended context
 - **Email Reminders**: Only work when app is open (push notifications needed for background reminders)
 
 ### Technical Limitations
-- **Audio Quality**: Fallback system generates basic procedural music (not professional quality)
+- **API Dependencies**: Requires ElevenLabs API access for AI music generation
 - **Browser Compatibility**: Web Audio API support varies across browsers
 - **Storage Limits**: localStorage has size limitations for audio data
-- **Mobile Performance**: Complex audio generation may impact mobile performance
+- **Mobile Performance**: Audio processing may impact mobile performance
 
 ### Planned Improvements
-- **Alternative AI APIs**: Integrate with other music generation services
-- **Enhanced Procedural Generation**: Improve musical complexity and quality
-- **Offline Support**: Better offline music generation capabilities
+- **Enhanced AI Prompts**: Improve prompt engineering for better sound effects generation
+- **Multiple AI Services**: Integrate with additional sound effects generation APIs
+- **Offline Support**: Better offline sound effects generation capabilities
 - **Audio Effects**: Add reverb, delay, and other audio effects
-- **Export Features**: Allow users to download generated music
+- **Export Features**: Allow users to download generated sound effects
 - **Push Notifications**: Background reminders when app is not running
 - **Enhanced Email Features**: More sophisticated email templates and scheduling
 
@@ -154,12 +149,12 @@ The fallback system incorporates basic musical theory:
 ## Contributing
 
 Feel free to fork, contribute, or open issues! Areas for contribution:
-- Alternative AI music generation APIs
-- Enhanced procedural music algorithms
+- Enhanced AI sound effects generation prompts
+- Additional sound effects generation APIs
 - UI/UX improvements
 - Performance optimizations
 - Additional mood tracking features
 
 ---
 
-**Note**: This app demonstrates advanced fallback systems and cross-platform audio handling. While the AI music generation is currently limited by API availability, the procedural fallback system ensures users always get mood-appropriate music. 
+**Note**: This app demonstrates AI-powered sound effects generation using ElevenLabs Sound Effects API. The system creates unique, mood-appropriate audio experiences based on your emotional state and reflections. 

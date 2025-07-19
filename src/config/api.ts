@@ -6,20 +6,30 @@
  */
 
 export const API_CONFIG = {
-  // Hugging Face API Configuration
+  // ElevenLabs API Configuration (Recommended)
+  ELEVENLABS: {
+    // Get your API key from: https://elevenlabs.io/
+    API_KEY: 'sk_a8dc817712d334c201220401a0a947f55894775f41882d28',
+    
+    // API request settings
+    TIMEOUT: 30000, // 30 seconds
+    MAX_RETRIES: 3,
+  },
+  
+  // OpenAI TTS Configuration (Alternative)
+  OPENAI: {
+    // Get your API key from: https://platform.openai.com/
+    API_KEY: 'YOUR_OPENAI_API_KEY_HERE',
+    
+    // API request settings
+    TIMEOUT: 30000, // 30 seconds
+    MAX_RETRIES: 3,
+  },
+  
+  // Hugging Face API Configuration (Legacy - not working)
   HUGGING_FACE: {
     // Get your token from: https://huggingface.co/settings/tokens
-    API_TOKEN: 'YOUR_HUGGINGFACE_TOKEN_HERE',
-    
-    // MusicGen model endpoints (these may not be available through inference API)
-    MUSICGEN_SMALL: 'https://api-inference.huggingface.co/models/facebook/musicgen-small',
-    MUSICGEN_MEDIUM: 'https://api-inference.huggingface.co/models/facebook/musicgen-medium',
-    MUSICGEN_MELODY: 'https://api-inference.huggingface.co/models/facebook/musicgen-melody',
-    MUSICGEN_STABLE: 'https://api-inference.huggingface.co/models/facebook/musicgen-stereo-small',
-    
-    // Alternative working endpoints
-    AUDIOGEN: 'https://api-inference.huggingface.co/models/facebook/audiogen-medium',
-    TTS: 'https://api-inference.huggingface.co/models/facebook/fastspeech2-en-ljspeech',
+    API_TOKEN: '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',
     
     // API request settings
     TIMEOUT: 30000, // 30 seconds

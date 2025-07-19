@@ -162,11 +162,29 @@ class LocalStorageManager {
    */
   private async clearExcessiveData(): Promise<void> {
     try {
-      console.log('Clearing potentially corrupted old data...');
+      console.log('Checking for storage overflow...');
       
-      // Clear all AsyncStorage to reset the property count
-      await AsyncStorage.clear();
-      console.log('Cleared all AsyncStorage data to prevent overflow');
+      // Get all keys to check storage usage
+      const keys = await AsyncStorage.getAllKeys();
+      console.log('Current storage keys count:', keys.length);
+      
+      // Only clear if we have an excessive number of keys (over 1000)
+      if (keys.length > 1000) {
+        console.log('Storage overflow detected, clearing old data...');
+        
+        // Sort keys by timestamp if they contain timestamps
+        const sortedKeys = [...keys].sort();
+        
+        // Keep only the most recent 500 keys
+        const keysToRemove = sortedKeys.slice(0, sortedKeys.length - 500);
+        
+        if (keysToRemove.length > 0) {
+          await AsyncStorage.multiRemove(keysToRemove);
+          console.log('Cleared', keysToRemove.length, 'old keys to prevent overflow');
+        }
+      } else {
+        console.log('Storage usage is normal, no clearing needed');
+      }
       
     } catch (error) {
       console.error('Failed to clear excessive data:', error);
@@ -314,7 +332,15 @@ class LocalStorageManager {
    * @param entries The mood entries to store
    */
   async storeMoodEntries(userId: string, entries: MoodEntry[]): Promise<void> {
-    await this.storeData(`${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`, entries, false);
+    const key = `${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`;
+    console.log('💾 Storing mood entries for user:', userId, 'count:', entries.length);
+    console.log('💾 Storage key:', key);
+    
+    await this.storeData(key, entries, false);
+    
+    // Verify storage was successful
+    const storedEntries = await this.retrieveData<MoodEntry[]>(key, false);
+    console.log('💾 Verification - stored entries count:', storedEntries?.length || 0);
   }
 
   /**
@@ -323,7 +349,13 @@ class LocalStorageManager {
    * @returns The mood entries
    */
   async retrieveMoodEntries(userId: string): Promise<MoodEntry[]> {
-    const entries = await this.retrieveData<MoodEntry[]>(`${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`, false);
+    const key = `${LocalStorageManager.MOOD_ENTRIES_KEY}_${userId}`;
+    console.log('📖 Retrieving mood entries for user:', userId);
+    console.log('📖 Storage key:', key);
+    
+    const entries = await this.retrieveData<MoodEntry[]>(key, false);
+    console.log('📖 Retrieved entries:', entries?.length || 0, 'entries');
+    
     return entries || [];
   }
 
