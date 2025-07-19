@@ -199,14 +199,9 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
       const playbackStatus = MusicGenerationService.getPlaybackStatus();
       setIsPlaying(playbackStatus.isPlaying && playbackStatus.currentMusicId === musicId);
       
-      // Send notification that music is ready (implements requirement 6.3)
-      // In a real app, this would be called when music generation completes
-      // For this component, we'll call it when the music is first loaded
-      // to demonstrate the functionality
-      if (music && music.entryId) {
-        NotificationService.sendMusicReadyNotification(userId, music.entryId, musicId)
-          .catch(err => console.error('Failed to send music ready notification:', err));
-      }
+      // Note: Music ready notification is now sent only when music generation completes,
+      // not when the music player loads. This prevents unnecessary notifications
+      // when users open existing mood entries.
       
       setIsLoading(false);
     } catch (err) {
