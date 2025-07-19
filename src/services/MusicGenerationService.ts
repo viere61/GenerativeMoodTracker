@@ -759,6 +759,7 @@ class MusicGenerationService {
           text: soundDescription,
           model_id: 'eleven_sound_effects_v1',
           output_format: 'mp3',
+          duration_seconds: 8,
         }),
       });
       
@@ -773,6 +774,7 @@ class MusicGenerationService {
           text: soundDescription,
           model_id: 'eleven_sound_effects_v1',
           output_format: 'mp3',
+          duration_seconds: 8,
         }));
         throw new Error(`ElevenLabs API failed: ${response.status} ${errorText}`);
       }
@@ -797,7 +799,7 @@ class MusicGenerationService {
       
       const audioUrl = await this.saveAudioFile(audioBlob, musicObject.musicId);
       musicObject.audioUrl = audioUrl;
-      musicObject.duration = 8;
+      musicObject.duration = 8; // Set to 8 seconds as requested
       
       // Update music parameters to reflect AI generation instead of procedural
       musicObject.musicParameters = {
@@ -1172,6 +1174,7 @@ class MusicGenerationService {
           timestamp: musicObject.generatedAt,
           moodRating: 5, // Default mood rating
           emotionTags: ['neutral'],
+          influences: ['music'],
           reflection: 'Generated music',
           musicGenerated: false,
         };
@@ -1898,6 +1901,7 @@ class MusicGenerationService {
         timestamp: Date.now(),
         moodRating: 7,
         emotionTags: ['happy', 'excited'],
+        influences: ['music'],
         reflection: 'This is a test mood entry for debugging music generation',
         musicGenerated: false
       };
@@ -1972,6 +1976,7 @@ class MusicGenerationService {
         timestamp: musicObject.generatedAt,
         moodRating: 5, // Default mood rating
         emotionTags: ['neutral'],
+        influences: ['music'],
         reflection: 'Regenerated music',
         musicGenerated: false,
       };
