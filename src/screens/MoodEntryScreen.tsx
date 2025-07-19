@@ -17,6 +17,7 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { RootStackParamList, MainTabParamList } from '../navigation/AppNavigator';
 import MoodRatingSelector from '../components/MoodRatingSelector';
 import EmotionTagSelector from '../components/EmotionTagSelector';
+import InfluenceSelector from '../components/InfluenceSelector';
 import ReflectionTextInput from '../components/ReflectionTextInput';
 import MoodEntryService from '../services/MoodEntryService';
 
@@ -39,9 +40,11 @@ const MoodEntryScreen = () => {
   
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [emotionTags, setEmotionTags] = useState<string[]>([]);
+  const [influences, setInfluences] = useState<string[]>([]);
   const [reflection, setReflection] = useState('');
   const [isRatingValid, setIsRatingValid] = useState(false);
   const [areTagsValid, setAreTagsValid] = useState(false);
+  const [areInfluencesValid, setAreInfluencesValid] = useState(false);
   const [isReflectionValid, setIsReflectionValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAlreadyLoggedToday, setHasAlreadyLoggedToday] = useState(false);
@@ -74,7 +77,7 @@ const MoodEntryScreen = () => {
   }, [user]);
   
   // Check if form is valid
-  const isFormValid = isRatingValid && areTagsValid && isReflectionValid;
+  const isFormValid = isRatingValid && areTagsValid && areInfluencesValid && isReflectionValid;
   
   const handleSubmit = async () => {
     if (!user?.userId || !moodRating || !isFormValid) return;
@@ -87,6 +90,7 @@ const MoodEntryScreen = () => {
         user.userId,
         moodRating,
         emotionTags,
+        influences,
         reflection
       );
       
@@ -200,6 +204,36 @@ const MoodEntryScreen = () => {
           </View>
         </View>
         
+        {/* Simple influences */}
+        <View style={styles.influencesContainer}>
+          <Text style={styles.sectionTitle}>Influences (select at least 1)</Text>
+          <View style={styles.influenceButtons}>
+            {['Family', 'Work', 'Friends', 'Exercise', 'Travel', 'Health'].map((influence) => (
+              <TouchableOpacity
+                key={influence}
+                style={[
+                  styles.influenceButton,
+                  influences.includes(influence) && styles.selectedInfluenceButton
+                ]}
+                onPress={() => {
+                  if (influences.includes(influence)) {
+                    setInfluences(influences.filter(inf => inf !== influence));
+                  } else {
+                    setInfluences([...influences, influence]);
+                  }
+                }}
+              >
+                <Text style={[
+                  styles.influenceButtonText,
+                  influences.includes(influence) && styles.selectedInfluenceButtonText
+                ]}>
+                  {influence}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        
         {/* Simple reflection input */}
         <View style={styles.reflectionContainer}>
           <Text style={styles.sectionTitle}>Reflection (minimum 20 characters)</Text>
@@ -243,6 +277,9 @@ const MoodEntryScreen = () => {
             )}
             {emotionTags.length === 0 && (
               <Text style={styles.validationMessage}>• Select at least one emotion</Text>
+            )}
+            {influences.length === 0 && (
+              <Text style={styles.validationMessage}>• Select at least one influence</Text>
             )}
             {reflection.length < 20 && (
               <Text style={styles.validationMessage}>
@@ -288,6 +325,13 @@ const MoodEntryScreen = () => {
                 minSelections={1}
               />
             </View>
+            <View style={styles.influencesContainer}>
+              <InfluenceSelector
+                selectedInfluences={influences}
+                onInfluencesChange={setInfluences}
+                onValidationChange={setAreInfluencesValid}
+              />
+            </View>
             <View style={styles.reflectionContainer}>
               <ReflectionTextInput
                 value={reflection}
@@ -325,6 +369,9 @@ const MoodEntryScreen = () => {
                 {!areTagsValid && (
                   <Text style={styles.validationMessage}>• Select at least one emotion</Text>
                 )}
+                {!areInfluencesValid && (
+                  <Text style={styles.validationMessage}>• Select at least one influence</Text>
+                )}
                 {!isReflectionValid && (
                   <Text style={styles.validationMessage}>
                     • Write a reflection (minimum 20 characters)
@@ -355,6 +402,13 @@ const MoodEntryScreen = () => {
               onChange={setEmotionTags}
               onValidationChange={setAreTagsValid}
               minSelections={1}
+            />
+          </View>
+          <View style={styles.influencesContainer}>
+            <InfluenceSelector
+              selectedInfluences={influences}
+              onInfluencesChange={setInfluences}
+              onValidationChange={setAreInfluencesValid}
             />
           </View>
           <View style={styles.reflectionContainer}>
@@ -391,14 +445,17 @@ const MoodEntryScreen = () => {
               {!isRatingValid && (
                 <Text style={styles.validationMessage}>• Select a mood rating</Text>
               )}
-              {!areTagsValid && (
-                <Text style={styles.validationMessage}>• Select at least one emotion</Text>
-              )}
-              {!isReflectionValid && (
-                <Text style={styles.validationMessage}>
-                  • Write a reflection (minimum 20 characters)
-                </Text>
-              )}
+                              {!areTagsValid && (
+                  <Text style={styles.validationMessage}>• Select at least one emotion</Text>
+                )}
+                {!areInfluencesValid && (
+                  <Text style={styles.validationMessage}>• Select at least one influence</Text>
+                )}
+                {!isReflectionValid && (
+                  <Text style={styles.validationMessage}>
+                    • Write a reflection (minimum 20 characters)
+                  </Text>
+                )}
             </View>
           )}
           <View style={{ height: 100 }} />
@@ -439,6 +496,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emotionsContainer: {
+    marginBottom: 20,
+  },
+  influencesContainer: {
     marginBottom: 20,
   },
   reflectionContainer: {
@@ -546,6 +606,31 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   selectedEmotionButtonText: {
+    color: 'white',
+  },
+  influenceButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+  },
+  influenceButton: {
+    width: '45%', // Adjust as needed for 6 buttons
+    aspectRatio: 1.5,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 5,
+    backgroundColor: '#E0E0E0',
+  },
+  selectedInfluenceButton: {
+    backgroundColor: '#FF9800',
+  },
+  influenceButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  selectedInfluenceButtonText: {
     color: 'white',
   },
   textInput: {

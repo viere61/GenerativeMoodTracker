@@ -24,6 +24,7 @@ class MoodEntryService {
     userId: string,
     moodRating: number,
     emotionTags: string[] = [],
+    influences: string[] = [],
     reflection: string = ''
   ): Promise<MoodEntry> {
     // Ensure LocalStorageManager is initialized for mobile
@@ -49,6 +50,7 @@ class MoodEntryService {
       timestamp: Date.now(),
       moodRating,
       emotionTags,
+      influences,
       reflection,
       musicGenerated: false
     };

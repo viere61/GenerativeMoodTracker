@@ -134,6 +134,19 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
             </Text>
           ))}
         </View>
+        {item.influences && item.influences.length > 0 && (
+          <View style={styles.influenceContainer}>
+            <Text style={styles.influenceLabel}>Influences:</Text>
+            {item.influences.map((influence, index) => (
+              <Text 
+                key={index} 
+                style={styles.influenceTag}
+              >
+                {influence}
+              </Text>
+            ))}
+          </View>
+        )}
         <Text 
           style={styles.entryReflection}
           numberOfLines={2}
@@ -380,6 +393,27 @@ const styles = StyleSheet.create({
     marginRight: 5,
     marginBottom: 5,
     fontSize: 12,
+  },
+  influenceContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  influenceLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#666',
+    marginRight: 8,
+  },
+  influenceTag: {
+    padding: 4,
+    borderRadius: 8,
+    marginRight: 5,
+    marginBottom: 5,
+    fontSize: 11,
+    backgroundColor: '#f0f0f0',
+    color: '#555',
   },
   entryReflection: {
     fontSize: 14,

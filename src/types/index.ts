@@ -51,6 +51,7 @@ export interface MoodEntry {
   timestamp: number; // Timestamp
   moodRating: number; // 1-10
   emotionTags: string[];
+  influences: string[]; // What influenced your mood
   reflection: string;
   musicGenerated: boolean;
   musicId?: string;
