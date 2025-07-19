@@ -126,7 +126,10 @@ class NotificationService {
               windowEnd: dailyWindow.windowEnd,
             },
           },
-                  trigger: triggerTime,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: triggerTime,
+          },
         });
         
         // Mark notification as sent
@@ -181,7 +184,10 @@ class NotificationService {
             userId,
           },
         },
-        trigger: new Date(nextDayEarliestStart),
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(nextDayEarliestStart),
+        },
       });
       
       return true;
@@ -241,7 +247,10 @@ class NotificationService {
           body: 'This is a test notification from the Generative Mood Tracker app.',
           data: { type: 'test' },
         },
-        trigger: null, // Send immediately
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: 1,
+        },
       });
       
       return true;
@@ -277,7 +286,10 @@ class NotificationService {
             musicId,
           },
         },
-        trigger: null, // Send immediately
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: 1,
+        },
       });
       
       return true;

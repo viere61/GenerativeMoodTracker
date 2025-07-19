@@ -9,6 +9,9 @@ const cron = require('node-cron');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy for Railway deployment (fixes rate limiting issue)
+app.set('trust proxy', 1);
+
 // Initialize SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
@@ -42,6 +45,9 @@ app.use('/api/', limiter);
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Import routes
+const musicGenerationRoutes = require('./music-generation');
 
 // Email templates
 const emailTemplates = {
@@ -221,6 +227,9 @@ app.get('/api/health', (req, res) => {
     service: 'email-notification-service'
   });
 });
+
+// Music generation routes
+app.use('/api/music', musicGenerationRoutes);
 
 app.post('/api/send-mood-reminder', async (req, res) => {
   try {

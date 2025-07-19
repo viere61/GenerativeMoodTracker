@@ -733,14 +733,8 @@ class MusicGenerationService {
    * Try to generate music using Hugging Face MusicGen API
    */
   private async tryElevenLabsGeneration(prompt: string, musicObject: GeneratedMusic): Promise<GeneratedMusic> {
-    const apiKey = this.AI_SERVICES.ELEVENLABS.apiKey;
-    
-    if (apiKey === 'YOUR_ELEVENLABS_API_KEY_HERE') {
-      throw new Error('ElevenLabs API key not configured');
-    }
-    
     if (isDebugMode()) {
-      console.log('🎵 Trying ElevenLabs Sound Effects API...');
+      console.log('🎵 Trying ElevenLabs Sound Effects API via backend proxy...');
       console.log('🎵 Prompt:', prompt);
     }
     
@@ -748,53 +742,51 @@ class MusicGenerationService {
       // Convert mood prompt to a sound effects description
       const soundDescription = this.convertMoodToSoundDescription(prompt);
       
-      const response = await fetch(this.AI_SERVICES.ELEVENLABS.endpoint, {
+      // Use backend proxy instead of direct API call
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/music/generate`, {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg, audio/mp4, audio/wav, */*',
           'Content-Type': 'application/json',
-          'xi-api-key': apiKey,
         },
         body: JSON.stringify({
-          text: soundDescription,
-          model_id: 'eleven_sound_effects_v1',
-          output_format: 'mp3',
-          duration_seconds: 8,
+          prompt: soundDescription,
+          userId: musicObject.userId
         }),
       });
       
       if (isDebugMode()) {
-        console.log('🎵 ElevenLabs response status:', response.status);
+        console.log('🎵 Backend proxy response status:', response.status);
       }
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🎵 ElevenLabs API Error:', response.status, errorText);
-        console.error('🎵 Request body:', JSON.stringify({
-          text: soundDescription,
-          model_id: 'eleven_sound_effects_v1',
-          output_format: 'mp3',
-          duration_seconds: 8,
-        }));
-        throw new Error(`ElevenLabs API failed: ${response.status} ${errorText}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('🎵 Backend API Error:', response.status, errorData);
+        throw new Error(`Backend API failed: ${response.status} ${errorData.error || response.statusText}`);
       }
       
-      // Get the audio data as array buffer (can only read response body once)
-      const arrayBuffer = await response.arrayBuffer();
-      console.log('🎵 Got array buffer, size:', arrayBuffer.byteLength);
+      const result = await response.json();
       
-      // In React Native, we can't create Blob from ArrayBuffer, so we'll work directly with the array buffer
+      if (!result.success) {
+        throw new Error(result.error || 'Music generation failed');
+      }
+      
+      // Convert base64 to array buffer
+      const audioData = atob(result.audioData);
+      const audioArray = new Uint8Array(audioData.length);
+      for (let i = 0; i < audioData.length; i++) {
+        audioArray[i] = audioData.charCodeAt(i);
+      }
+      
       // Create a mock blob object with the _data property that React Native expects
       const audioBlob = {
-        _data: arrayBuffer,
-        size: arrayBuffer.byteLength,
+        _data: audioArray.buffer,
+        size: audioArray.length,
         type: 'audio/mpeg'
       } as any;
       
       if (isDebugMode()) {
-        console.log('🎵 ElevenLabs audio received, size:', audioBlob.size, 'bytes');
+        console.log('🎵 Backend audio received, size:', audioBlob.size, 'bytes');
         console.log('🎵 Audio blob type:', audioBlob.type);
-        console.log('🎵 Audio blob methods:', Object.getOwnPropertyNames(audioBlob));
       }
       
       const audioUrl = await this.saveAudioFile(audioBlob, musicObject.musicId);
@@ -809,11 +801,11 @@ class MusicGenerationService {
         mood: 'AI Generated'
       };
       
-      console.log('🎵 Successfully generated AI audio with ElevenLabs!');
+      console.log('🎵 Successfully generated AI audio via backend proxy!');
       return musicObject;
       
     } catch (error) {
-      console.error('🎵 ElevenLabs API call failed:', error);
+      console.error('🎵 Backend API call failed:', error);
       throw error;
     }
   }

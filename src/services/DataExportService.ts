@@ -179,7 +179,7 @@ class DataExportService {
    * @param options Export options
    * @returns Path to the generated file
    */
-  private async generateExportFile(userId: string, data: any, options: ExportFormat): Promise<string> {
+  private async generateExportFile(userId: string, data: any, options: ExportOptions): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `mood_data_${timestamp}`;
     

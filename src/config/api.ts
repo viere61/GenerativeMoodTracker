@@ -6,6 +6,9 @@
  */
 
 export const API_CONFIG = {
+  // Backend API Configuration
+  BACKEND_URL: 'https://generativemoodtracker-production-e893.up.railway.app', // Railway backend URL
+  
   // ElevenLabs API Configuration (Recommended)
   ELEVENLABS: {
     // Get your API key from: https://elevenlabs.io/

@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   ScrollView
 } from 'react-native';
-import { AuthContext } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import AuthService from '../services/AuthService';
 
 interface AccountManagementModalProps {
@@ -32,7 +32,7 @@ const AccountManagementModal: React.FC<AccountManagementModalProps> = ({ visible
   const [confirmDelete, setConfirmDelete] = useState(false);
   
   // Get auth context
-  const { authState, logout } = useContext(AuthContext);
+  const { authState, logout } = useAuth();
   
   // Handle password change
   const handlePasswordChange = async () => {

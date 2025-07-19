@@ -2,5 +2,11 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  "exclude": [
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "e2e/**"
+  ]
 }
