@@ -29,6 +29,8 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
     
     console.log('Calling ElevenLabs API with prompt:', prompt);
     console.log('API Key present:', !!process.env.ELEVENLABS_API_KEY);
+    console.log('API Key length:', process.env.ELEVENLABS_API_KEY?.length || 0);
+    console.log('API Key starts with:', process.env.ELEVENLABS_API_KEY?.substring(0, 10) || 'N/A');
     
     // Call ElevenLabs API
     const response = await axios.post('https://api.elevenlabs.io/v1/sound-generation', {
@@ -62,9 +64,15 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
 
   } catch (error) {
     console.error('Music generation error:', error.response?.data || error.message);
+    console.error('Error status:', error.response?.status);
+    console.error('Error details:', error.response?.data);
     
     if (error.response?.status === 429) {
       return res.status(429).json({ error: 'Rate limit exceeded for ElevenLabs API' });
+    }
+    
+    if (error.response?.status === 401) {
+      return res.status(401).json({ error: 'Invalid ElevenLabs API key' });
     }
     
     // Handle ElevenLabs unusual activity detection
@@ -79,7 +87,12 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
       }
     }
     
-    res.status(500).json({ error: 'Music generation failed' });
+    // Return more specific error information
+    res.status(500).json({ 
+      error: 'Music generation failed',
+      details: error.message,
+      status: error.response?.status
+    });
   }
 });
 
