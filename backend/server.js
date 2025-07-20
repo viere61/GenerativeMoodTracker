@@ -238,7 +238,9 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    service: 'email-notification-service'
+    service: 'email-notification-service',
+    elevenlabsConfigured: !!process.env.ELEVENLABS_API_KEY,
+    elevenlabsKeyLength: process.env.ELEVENLABS_API_KEY?.length || 0
   });
 });
 
