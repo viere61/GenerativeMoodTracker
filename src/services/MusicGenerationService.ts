@@ -957,8 +957,9 @@ class MusicGenerationService {
         const storageKey = `audio_data_${musicId}`;
         localStorage.setItem(storageKey, audioBase64);
         
-        // Create a blob URL for immediate use
-        const audioUrl = URL.createObjectURL(audioBlob);
+        // Create a real Blob object for URL.createObjectURL
+        const realBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(realBlob);
         
         if (isDebugMode()) {
           console.log('Audio data stored with key:', storageKey);
