@@ -742,6 +742,11 @@ class MusicGenerationService {
       // Convert mood prompt to a sound effects description
       const soundDescription = this.convertMoodToSoundDescription(prompt);
       
+      if (isDebugMode()) {
+        console.log('🎵 Making request to backend:', `${API_CONFIG.BACKEND_URL}/api/music/generate`);
+        console.log('🎵 Request payload:', { prompt: soundDescription, userId: musicObject.userId });
+      }
+      
       // Use backend proxy instead of direct API call
       const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/music/generate`, {
         method: 'POST',
