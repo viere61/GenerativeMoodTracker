@@ -49,8 +49,8 @@ async function generateSoundEffects(prompt) {
 
     // Use Sound Effects API (available on paid plans)
     try {
-        console.log('Using ElevenLabs Sound Effects API...');
-        const response = await axios.post('https://api.elevenlabs.io/v1/sound-effects', {
+        console.log('Using ElevenLabs Sound Generation API...');
+        const response = await axios.post('https://api.elevenlabs.io/v1/sound-generation', {
             text: prompt,
             duration_seconds: 8,
             prompt_influence: 0.3
@@ -76,11 +76,11 @@ async function generateSoundEffects(prompt) {
 
         // Check if this is a 404 error (endpoint doesn't exist)
         if (soundError.response?.status === 404) {
-            throw new Error('Sound effects API not available (404) - verify your subscription includes this feature');
+            throw new Error('Sound Generation API not available (404) - verify your subscription includes this feature');
         } else if (soundError.response?.status === 401) {
-            throw new Error('Unauthorized access to Sound Effects API - verify your subscription and API key');
+            throw new Error('Unauthorized access to Sound Generation API - verify your subscription and API key');
         } else {
-            throw new Error(`Sound effects generation failed: ${soundError.message}`);
+            throw new Error(`Sound generation failed: ${soundError.message}`);
         }
     }
 }

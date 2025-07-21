@@ -342,18 +342,18 @@ router.get('/test-services', async (req, res) => {
           'xi-api-key': process.env.ELEVENLABS_API_KEY
         }
       });
-      
+
       // Check subscription tier
       const tier = userResponse.data.subscription?.tier || 'free';
       const isPaidTier = tier.toLowerCase() !== 'free';
-      
+
       services.elevenlabs.status = 'working';
       services.elevenlabs.tier = tier;
       services.elevenlabs.isPaid = isPaidTier;
-      
-      // Test Sound Effects API specifically
+
+      // Test Sound Generation API specifically
       try {
-        await axios.post('https://api.elevenlabs.io/v1/sound-effects', {
+        await axios.post('https://api.elevenlabs.io/v1/sound-generation', {
           text: 'test sound',
           duration_seconds: 1
         }, {
@@ -364,12 +364,12 @@ router.get('/test-services', async (req, res) => {
           responseType: 'arraybuffer',
           timeout: 5000
         });
-        services.elevenlabs.soundEffectsAvailable = true;
+        services.elevenlabs.soundGenerationAvailable = true;
       } catch (soundError) {
-        services.elevenlabs.soundEffectsAvailable = false;
-        services.elevenlabs.soundEffectsError = soundError.response?.status;
+        services.elevenlabs.soundGenerationAvailable = false;
+        services.elevenlabs.soundGenerationError = soundError.response?.status;
       }
-      
+
     } catch (error) {
       services.elevenlabs.status = 'error';
       services.elevenlabs.error = error.message;
