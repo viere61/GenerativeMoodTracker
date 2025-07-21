@@ -21,9 +21,33 @@ const musicServices = {
     }
 
     console.log('🎵 Generating sound effects with ElevenLabs...');
-    
+
+    // First, verify the API key works by checking user info
+    try {
+      const userResponse = await axios.get('https://api.elevenlabs.io/v1/user', {
+        headers: {
+          'xi-api-key': process.env.ELEVENLABS_API_KEY
+        },
+        timeout: 5000
+      });
+
+      console.log('✅ ElevenLabs API key verified, subscription tier:',
+        userResponse.data.subscription?.tier || 'Free');
+    } catch (authError) {
+      // If we can't even verify the API key, don't try the other endpoints
+      console.error('❌ ElevenLabs API key verification failed:',
+        authError.response?.status, authError.message);
+
+      if (authError.response?.status === 401) {
+        throw new Error('ElevenLabs API key is invalid or account has been restricted');
+      } else {
+        throw new Error(`ElevenLabs API key verification failed: ${authError.message}`);
+      }
+    }
+
     // Try sound effects API first
     try {
+      console.log('Trying ElevenLabs Sound Effects API...');
       const response = await axios.post('https://api.elevenlabs.io/v1/sound-effects', {
         text: prompt,
         duration_seconds: 8,
@@ -36,31 +60,55 @@ const musicServices = {
         responseType: 'arraybuffer',
         timeout: 30000 // 30 second timeout
       });
-      
-      return Buffer.from(response.data);
+
+      // Verify we got actual audio data
+      if (response.data && response.data.length > 1000) {
+        console.log('✅ Sound effects generated successfully, size:', response.data.length);
+        return Buffer.from(response.data);
+      } else {
+        console.warn('⚠️ Sound effects API returned suspiciously small data:', response.data.length);
+        throw new Error('Sound effects API returned invalid data');
+      }
     } catch (soundError) {
       console.log('Sound effects API failed, trying text-to-speech fallback...');
-      
+
+      // Check if this is a 404 error (endpoint doesn't exist)
+      if (soundError.response?.status === 404) {
+        console.log('Sound effects API not available (404), might require subscription upgrade');
+      }
+
       // Fallback to text-to-speech with ambient description
-      const response = await axios.post('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
-        text: `Create peaceful ambient sounds representing: ${prompt}. Gentle, atmospheric, calming tones that evoke this mood and setting.`,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: {
-          stability: 0.8,
-          similarity_boost: 0.3,
-          style: 0.2,
-          use_speaker_boost: false
+      try {
+        const response = await axios.post('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
+          text: `Create peaceful ambient sounds representing: ${prompt}. Gentle, atmospheric, calming tones that evoke this mood and setting.`,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: {
+            stability: 0.8,
+            similarity_boost: 0.3,
+            style: 0.2,
+            use_speaker_boost: false
+          }
+        }, {
+          headers: {
+            'xi-api-key': process.env.ELEVENLABS_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer',
+          timeout: 30000
+        });
+
+        // Verify we got actual audio data
+        if (response.data && response.data.length > 1000) {
+          console.log('✅ Text-to-speech generated successfully, size:', response.data.length);
+          return Buffer.from(response.data);
+        } else {
+          console.warn('⚠️ Text-to-speech API returned suspiciously small data:', response.data.length);
+          throw new Error('Text-to-speech API returned invalid data');
         }
-      }, {
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'arraybuffer',
-        timeout: 30000
-      });
-      
-      return Buffer.from(response.data);
+      } catch (ttsError) {
+        console.error('❌ Text-to-speech fallback also failed:', ttsError.message);
+        throw new Error(`ElevenLabs generation failed: ${ttsError.message}`);
+      }
     }
   },
 
@@ -71,7 +119,7 @@ const musicServices = {
     }
 
     console.log('🎵 Generating music with Replicate MusicGen...');
-    
+
     // Create prediction
     const prediction = await axios.post('https://api.replicate.com/v1/predictions', {
       version: "7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906", // MusicGen model
@@ -92,7 +140,7 @@ const musicServices = {
     let result = prediction.data;
     let attempts = 0;
     const maxAttempts = 60; // 60 seconds max wait time
-    
+
     while ((result.status === 'starting' || result.status === 'processing') && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await axios.get(`https://api.replicate.com/v1/predictions/${result.id}`, {
@@ -122,7 +170,7 @@ const musicServices = {
     }
 
     console.log('🎵 Generating music with Hugging Face...');
-    
+
     const response = await axios.post(
       'https://api-inference.huggingface.co/models/facebook/musicgen-small',
       {
@@ -148,7 +196,7 @@ const musicServices = {
     }
 
     console.log('🎵 Generating music with Suno AI...');
-    
+
     // Note: This is a placeholder - you'd need to implement actual Suno API calls
     // Suno's API might have different endpoints and parameters
     const response = await axios.post('https://api.suno.ai/v1/generate', {
@@ -169,7 +217,7 @@ const musicServices = {
   // Fallback: Generate a simple tone-based audio description
   async generateFallbackAudio(prompt) {
     console.log('🎵 Generating fallback audio description...');
-    
+
     // Analyze prompt for mood and generate appropriate tone parameters
     const moodMapping = {
       happy: { frequency: 440, type: 'major', tempo: 'upbeat' },
@@ -187,7 +235,7 @@ const musicServices = {
 
     // Find matching mood in prompt
     const promptLower = prompt.toLowerCase();
-    const mood = Object.keys(moodMapping).find(key => 
+    const mood = Object.keys(moodMapping).find(key =>
       promptLower.includes(key)
     ) || 'default';
 
@@ -206,20 +254,20 @@ const musicServices = {
 router.post('/generate', musicGenerationLimiter, async (req, res) => {
   try {
     const { prompt, userId } = req.body;
-    
+
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
     console.log(`🎵 Generating music for prompt: "${prompt}"`);
-    
+
     let audioData = null;
     let audioFormat = 'mp3';
     let generationMethod = 'unknown';
     let errors = [];
 
     // Try different services in order of preference
-    
+
     // 1. Try ElevenLabs first (fastest, good for sound effects)
     if (process.env.ELEVENLABS_API_KEY && !audioData) {
       try {
@@ -278,7 +326,7 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
 
     // Log usage for analytics
     console.log(`🎵 Music generated for user ${userId} using ${generationMethod} at ${new Date().toISOString()}`);
-    
+
     // Handle different response types
     if (audioFormat === 'tone_description') {
       // Return tone data for client-side generation or display
@@ -291,25 +339,59 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
         errors: errors.length > 0 ? errors : undefined
       });
     } else {
-      // Return base64 encoded audio
-      const audioBase64 = audioData.toString('base64');
-      res.json({
-        success: true,
-        audioData: audioBase64,
-        format: audioFormat,
-        method: generationMethod,
-        duration: 8,
-        errors: errors.length > 0 ? errors : undefined
-      });
+      // Return base64 encoded audio - ensure it's properly encoded
+      try {
+        // Make sure we have valid binary data before encoding
+        if (!Buffer.isBuffer(audioData)) {
+          console.log('Warning: audioData is not a buffer, converting...');
+          audioData = Buffer.from(audioData);
+        }
+
+        // Use URL-safe base64 encoding that works with atob
+        const audioBase64 = audioData.toString('base64')
+          // Make sure it's URL-safe and compatible with atob
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+
+        // Validate the base64 string
+        if (!/^[A-Za-z0-9\-_]+$/.test(audioBase64)) {
+          throw new Error('Generated base64 contains invalid characters');
+        }
+
+        res.json({
+          success: true,
+          audioData: audioBase64,
+          format: audioFormat,
+          method: generationMethod,
+          duration: 8,
+          errors: errors.length > 0 ? errors : undefined
+        });
+      } catch (encodeError) {
+        console.error('Failed to encode audio data:', encodeError);
+
+        // Fall back to tone description if encoding fails
+        const fallbackAudio = await musicServices.generateFallbackAudio(prompt);
+        res.json({
+          success: true,
+          audioData: fallbackAudio,
+          format: 'tone_description',
+          method: 'fallback_after_encoding_error',
+          duration: 8,
+          originalMethod: generationMethod,
+          errors: [...errors, `Encoding error: ${encodeError.message}`]
+        });
+      }
     }
 
   } catch (error) {
     console.error('❌ Music generation error:', error.message);
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: 'Music generation failed',
       details: error.message,
       availableServices: {
+        elevenlabs: !!process.env.ELEVENLABS_API_KEY,
         replicate: !!process.env.REPLICATE_API_TOKEN,
         huggingface: !!process.env.HUGGINGFACE_API_TOKEN,
         suno: !!process.env.SUNO_API_KEY
@@ -392,9 +474,9 @@ router.get('/test-services', async (req, res) => {
     success: true,
     services: services,
     recommendation: services.elevenlabs.status === 'working' ? 'elevenlabs' :
-                   services.replicate.status === 'working' ? 'replicate' : 
-                   services.huggingface.status === 'working' ? 'huggingface' :
-                   services.suno.status === 'working' ? 'suno' : 'fallback'
+      services.replicate.status === 'working' ? 'replicate' :
+        services.huggingface.status === 'working' ? 'huggingface' :
+          services.suno.status === 'working' ? 'suno' : 'fallback'
   });
 });
 
@@ -404,6 +486,7 @@ router.get('/usage', async (req, res) => {
     res.json({
       totalRequests: 0, // Would be from database
       availableServices: {
+        elevenlabs: !!process.env.ELEVENLABS_API_KEY,
         replicate: !!process.env.REPLICATE_API_TOKEN,
         huggingface: !!process.env.HUGGINGFACE_API_TOKEN,
         suno: !!process.env.SUNO_API_KEY,
