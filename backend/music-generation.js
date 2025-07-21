@@ -16,100 +16,9 @@ const musicGenerationLimiter = rateLimit({
 const musicServices = {
   // ElevenLabs Sound Effects - Fast and good quality
   async generateWithElevenLabs(prompt) {
-    if (!process.env.ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY not configured');
-    }
-
-    console.log('🎵 Generating sound effects with ElevenLabs...');
-
-    // First, verify the API key works by checking user info
-    try {
-      const userResponse = await axios.get('https://api.elevenlabs.io/v1/user', {
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY
-        },
-        timeout: 5000
-      });
-
-      console.log('✅ ElevenLabs API key verified, subscription tier:',
-        userResponse.data.subscription?.tier || 'Free');
-    } catch (authError) {
-      // If we can't even verify the API key, don't try the other endpoints
-      console.error('❌ ElevenLabs API key verification failed:',
-        authError.response?.status, authError.message);
-
-      if (authError.response?.status === 401) {
-        throw new Error('ElevenLabs API key is invalid or account has been restricted');
-      } else {
-        throw new Error(`ElevenLabs API key verification failed: ${authError.message}`);
-      }
-    }
-
-    // Try sound effects API first
-    try {
-      console.log('Trying ElevenLabs Sound Effects API...');
-      const response = await axios.post('https://api.elevenlabs.io/v1/sound-effects', {
-        text: prompt,
-        duration_seconds: 8,
-        prompt_influence: 0.3
-      }, {
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'arraybuffer',
-        timeout: 30000 // 30 second timeout
-      });
-
-      // Verify we got actual audio data
-      if (response.data && response.data.length > 1000) {
-        console.log('✅ Sound effects generated successfully, size:', response.data.length);
-        return Buffer.from(response.data);
-      } else {
-        console.warn('⚠️ Sound effects API returned suspiciously small data:', response.data.length);
-        throw new Error('Sound effects API returned invalid data');
-      }
-    } catch (soundError) {
-      console.log('Sound effects API failed, trying text-to-speech fallback...');
-
-      // Check if this is a 404 error (endpoint doesn't exist)
-      if (soundError.response?.status === 404) {
-        console.log('Sound effects API not available (404), might require subscription upgrade');
-      }
-
-      // Fallback to text-to-speech with ambient description
-      try {
-        const response = await axios.post('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
-          text: `Create peaceful ambient sounds representing: ${prompt}. Gentle, atmospheric, calming tones that evoke this mood and setting.`,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: {
-            stability: 0.8,
-            similarity_boost: 0.3,
-            style: 0.2,
-            use_speaker_boost: false
-          }
-        }, {
-          headers: {
-            'xi-api-key': process.env.ELEVENLABS_API_KEY,
-            'Content-Type': 'application/json'
-          },
-          responseType: 'arraybuffer',
-          timeout: 30000
-        });
-
-        // Verify we got actual audio data
-        if (response.data && response.data.length > 1000) {
-          console.log('✅ Text-to-speech generated successfully, size:', response.data.length);
-          return Buffer.from(response.data);
-        } else {
-          console.warn('⚠️ Text-to-speech API returned suspiciously small data:', response.data.length);
-          throw new Error('Text-to-speech API returned invalid data');
-        }
-      } catch (ttsError) {
-        console.error('❌ Text-to-speech fallback also failed:', ttsError.message);
-        throw new Error(`ElevenLabs generation failed: ${ttsError.message}`);
-      }
-    }
+    // Use the dedicated ElevenLabs service
+    const elevenLabsService = require('./elevenlabs-service');
+    return await elevenLabsService.generateSoundEffects(prompt);
   },
 
   // Replicate MusicGen - Great for actual music generation
@@ -428,12 +337,39 @@ router.get('/test-services', async (req, res) => {
   // Test ElevenLabs
   if (services.elevenlabs.available) {
     try {
-      await axios.get('https://api.elevenlabs.io/v1/user', {
+      const userResponse = await axios.get('https://api.elevenlabs.io/v1/user', {
         headers: {
           'xi-api-key': process.env.ELEVENLABS_API_KEY
         }
       });
+      
+      // Check subscription tier
+      const tier = userResponse.data.subscription?.tier || 'free';
+      const isPaidTier = tier.toLowerCase() !== 'free';
+      
       services.elevenlabs.status = 'working';
+      services.elevenlabs.tier = tier;
+      services.elevenlabs.isPaid = isPaidTier;
+      
+      // Test Sound Effects API specifically
+      try {
+        await axios.post('https://api.elevenlabs.io/v1/sound-effects', {
+          text: 'test sound',
+          duration_seconds: 1
+        }, {
+          headers: {
+            'xi-api-key': process.env.ELEVENLABS_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer',
+          timeout: 5000
+        });
+        services.elevenlabs.soundEffectsAvailable = true;
+      } catch (soundError) {
+        services.elevenlabs.soundEffectsAvailable = false;
+        services.elevenlabs.soundEffectsError = soundError.response?.status;
+      }
+      
     } catch (error) {
       services.elevenlabs.status = 'error';
       services.elevenlabs.error = error.message;
