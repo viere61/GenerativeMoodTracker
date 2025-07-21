@@ -5,6 +5,7 @@ import WebStorageService from './WebStorageService';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { API_CONFIG, getHuggingFaceToken, isDebugMode } from '../config/api';
+import { base64ToUint8Array } from '../utils/base64Utils';
 
 // Check if we're running on web
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -39,26 +40,26 @@ class MusicGenerationService {
       enabled: false, // Requires API key setup
     }
   };
-  
+
   // Maximum number of retry attempts for music generation
   private readonly MAX_RETRIES = 3;
-  
+
   // Local directory for storing generated music files
   private readonly MUSIC_DIRECTORY = `${FileSystem.documentDirectory}music/`;
-  
+
   // Sound object for playback
   private soundObject: Audio.Sound | null = null;
-  
+
   // Track current playback status
   private isPlaying = false;
   private currentMusicId: string | null = null;
   private isRepeatEnabled = false;
   private volume = 1.0;
-  
+
   // Track generation status
   private generationInProgress = false;
-  private generationQueue: Array<{userId: string, moodEntry: MoodEntry}> = [];
-  
+  private generationQueue: Array<{ userId: string, moodEntry: MoodEntry }> = [];
+
   // Enhanced mapping of mood ratings to musical parameters
   private moodToMusicMap: Record<number, {
     tempo: number;
@@ -71,122 +72,122 @@ class MusicGenerationService {
     complexity: number;
     harmony: string;
   }> = {
-    // Very negative moods (1-2): Slow, minor keys, sparse instrumentation
-    1: {
-      tempo: 60,
-      keySignature: 'C minor',
-      scaleType: 'minor',
-      density: 0.3,
-      dynamics: 0.4,
-      instrumentation: ['piano', 'strings'],
-      reverb: 0.8,
-      complexity: 0.3,
-      harmony: 'dissonant',
-    },
-    2: {
-      tempo: 65,
-      keySignature: 'G minor',
-      scaleType: 'minor',
-      density: 0.4,
-      dynamics: 0.5,
-      instrumentation: ['piano', 'cello'],
-      reverb: 0.7,
-      complexity: 0.4,
-      harmony: 'minor',
-    },
-    // Somewhat negative moods (3-4): Slow-medium, minor keys with occasional major chords
-    3: {
-      tempo: 72,
-      keySignature: 'D minor',
-      scaleType: 'minor',
-      density: 0.5,
-      dynamics: 0.5,
-      instrumentation: ['piano', 'guitar', 'strings'],
-      reverb: 0.6,
-      complexity: 0.5,
-      harmony: 'minor_major',
-    },
-    4: {
-      tempo: 80,
-      keySignature: 'A minor',
-      scaleType: 'dorian',
-      density: 0.5,
-      dynamics: 0.6,
-      instrumentation: ['piano', 'guitar', 'bass'],
-      reverb: 0.5,
-      complexity: 0.5,
-      harmony: 'dorian',
-    },
-    // Neutral moods (5-6): Medium tempo, mix of minor and major
-    5: {
-      tempo: 88,
-      keySignature: 'F major',
-      scaleType: 'mixolydian',
-      density: 0.6,
-      dynamics: 0.6,
-      instrumentation: ['piano', 'guitar', 'bass', 'light percussion'],
-      reverb: 0.5,
-      complexity: 0.6,
-      harmony: 'mixolydian',
-    },
-    6: {
-      tempo: 96,
-      keySignature: 'D major',
-      scaleType: 'major',
-      density: 0.6,
-      dynamics: 0.7,
-      instrumentation: ['piano', 'guitar', 'bass', 'percussion'],
-      reverb: 0.4,
-      complexity: 0.6,
-      harmony: 'major',
-    },
-    // Positive moods (7-8): Medium-fast, major keys
-    7: {
-      tempo: 104,
-      keySignature: 'A major',
-      scaleType: 'major',
-      density: 0.7,
-      dynamics: 0.7,
-      instrumentation: ['piano', 'guitar', 'bass', 'percussion', 'synth'],
-      reverb: 0.4,
-      complexity: 0.7,
-      harmony: 'major',
-    },
-    8: {
-      tempo: 112,
-      keySignature: 'E major',
-      scaleType: 'lydian',
-      density: 0.7,
-      dynamics: 0.8,
-      instrumentation: ['piano', 'guitar', 'bass', 'percussion', 'synth'],
-      reverb: 0.3,
-      complexity: 0.7,
-      harmony: 'lydian',
-    },
-    // Very positive moods (9-10): Fast, bright major keys
-    9: {
-      tempo: 120,
-      keySignature: 'B major',
-      scaleType: 'lydian',
-      density: 0.8,
-      dynamics: 0.8,
-      instrumentation: ['piano', 'guitar', 'bass', 'full percussion', 'synth', 'brass'],
-      reverb: 0.3,
-      complexity: 0.8,
-      harmony: 'lydian',
-    },
-    10: {
-      tempo: 132,
-      keySignature: 'E major',
-      scaleType: 'lydian',
-      density: 0.9,
-      dynamics: 0.9,
-      instrumentation: ['piano', 'guitar', 'bass', 'full percussion', 'synth', 'brass', 'strings'],
-      reverb: 0.2,
-      complexity: 0.9,
-      harmony: 'lydian',
-    },
-  };
+      // Very negative moods (1-2): Slow, minor keys, sparse instrumentation
+      1: {
+        tempo: 60,
+        keySignature: 'C minor',
+        scaleType: 'minor',
+        density: 0.3,
+        dynamics: 0.4,
+        instrumentation: ['piano', 'strings'],
+        reverb: 0.8,
+        complexity: 0.3,
+        harmony: 'dissonant',
+      },
+      2: {
+        tempo: 65,
+        keySignature: 'G minor',
+        scaleType: 'minor',
+        density: 0.4,
+        dynamics: 0.5,
+        instrumentation: ['piano', 'cello'],
+        reverb: 0.7,
+        complexity: 0.4,
+        harmony: 'minor',
+      },
+      // Somewhat negative moods (3-4): Slow-medium, minor keys with occasional major chords
+      3: {
+        tempo: 72,
+        keySignature: 'D minor',
+        scaleType: 'minor',
+        density: 0.5,
+        dynamics: 0.5,
+        instrumentation: ['piano', 'guitar', 'strings'],
+        reverb: 0.6,
+        complexity: 0.5,
+        harmony: 'minor_major',
+      },
+      4: {
+        tempo: 80,
+        keySignature: 'A minor',
+        scaleType: 'dorian',
+        density: 0.5,
+        dynamics: 0.6,
+        instrumentation: ['piano', 'guitar', 'bass'],
+        reverb: 0.5,
+        complexity: 0.5,
+        harmony: 'dorian',
+      },
+      // Neutral moods (5-6): Medium tempo, mix of minor and major
+      5: {
+        tempo: 88,
+        keySignature: 'F major',
+        scaleType: 'mixolydian',
+        density: 0.6,
+        dynamics: 0.6,
+        instrumentation: ['piano', 'guitar', 'bass', 'light percussion'],
+        reverb: 0.5,
+        complexity: 0.6,
+        harmony: 'mixolydian',
+      },
+      6: {
+        tempo: 96,
+        keySignature: 'D major',
+        scaleType: 'major',
+        density: 0.6,
+        dynamics: 0.7,
+        instrumentation: ['piano', 'guitar', 'bass', 'percussion'],
+        reverb: 0.4,
+        complexity: 0.6,
+        harmony: 'major',
+      },
+      // Positive moods (7-8): Medium-fast, major keys
+      7: {
+        tempo: 104,
+        keySignature: 'A major',
+        scaleType: 'major',
+        density: 0.7,
+        dynamics: 0.7,
+        instrumentation: ['piano', 'guitar', 'bass', 'percussion', 'synth'],
+        reverb: 0.4,
+        complexity: 0.7,
+        harmony: 'major',
+      },
+      8: {
+        tempo: 112,
+        keySignature: 'E major',
+        scaleType: 'lydian',
+        density: 0.7,
+        dynamics: 0.8,
+        instrumentation: ['piano', 'guitar', 'bass', 'percussion', 'synth'],
+        reverb: 0.3,
+        complexity: 0.7,
+        harmony: 'lydian',
+      },
+      // Very positive moods (9-10): Fast, bright major keys
+      9: {
+        tempo: 120,
+        keySignature: 'B major',
+        scaleType: 'lydian',
+        density: 0.8,
+        dynamics: 0.8,
+        instrumentation: ['piano', 'guitar', 'bass', 'full percussion', 'synth', 'brass'],
+        reverb: 0.3,
+        complexity: 0.8,
+        harmony: 'lydian',
+      },
+      10: {
+        tempo: 132,
+        keySignature: 'E major',
+        scaleType: 'lydian',
+        density: 0.9,
+        dynamics: 0.9,
+        instrumentation: ['piano', 'guitar', 'bass', 'full percussion', 'synth', 'brass', 'strings'],
+        reverb: 0.2,
+        complexity: 0.9,
+        harmony: 'lydian',
+      },
+    };
 
   // Enhanced emotion tags and their musical influences
   private emotionToMusicMap: Record<string, any> = {
@@ -226,7 +227,7 @@ class MusicGenerationService {
       density: 0.4,
       harmonyModifier: 'ambient',
     },
-    
+
     // Neutral emotions
     'calm': {
       scaleModifier: 'major',
@@ -249,7 +250,7 @@ class MusicGenerationService {
       reverbModifier: 0.1,
       harmonyModifier: 'modal',
     },
-    
+
     // Positive emotions
     'happy': {
       scaleModifier: 'major',
@@ -308,7 +309,7 @@ class MusicGenerationService {
     'lonely': { tempoModifier: -10, scalePreference: 'minor' },
     'tired': { tempoModifier: -15, scalePreference: 'minor' },
     'exhausted': { tempoModifier: -15, scalePreference: 'minor' },
-    
+
     // Positive sentiment keywords
     'happy': { tempoModifier: 10, scalePreference: 'major' },
     'joy': { tempoModifier: 15, scalePreference: 'lydian' },
@@ -320,7 +321,7 @@ class MusicGenerationService {
     'love': { tempoModifier: 0, scalePreference: 'major' },
     'hope': { tempoModifier: 5, scalePreference: 'major' },
     'inspired': { tempoModifier: 10, scalePreference: 'lydian' },
-    
+
     // Intensity modifiers
     'very': { intensityModifier: 0.2 },
     'extremely': { intensityModifier: 0.3 },
@@ -337,13 +338,13 @@ class MusicGenerationService {
     // Start with base parameters from mood rating
     const moodRating = Math.min(Math.max(Math.round(moodEntry.moodRating), 1), 10);
     const baseParameters = { ...this.moodToMusicMap[moodRating] };
-    
+
     // Adjust parameters based on emotion tags
     const adjustedParameters = this.applyEmotionTagModifiers(baseParameters, moodEntry.emotionTags);
-    
+
     // Further adjust based on text analysis of reflection
     const finalParameters = this.applyTextAnalysisModifiers(adjustedParameters, moodEntry.reflection);
-    
+
     return finalParameters;
   }
 
@@ -355,45 +356,45 @@ class MusicGenerationService {
    */
   private applyEmotionTagModifiers(baseParameters: any, emotionTags: string[]): any {
     const params = { ...baseParameters };
-    
+
     // Apply modifiers from each emotion tag
     emotionTags.forEach(tag => {
       const emotion = tag.toLowerCase();
       if (this.emotionToMusicMap[emotion]) {
         const modifiers = this.emotionToMusicMap[emotion];
-        
+
         // Apply tempo modifier
         if (modifiers.tempoModifier) {
           params.tempo += modifiers.tempoModifier;
         }
-        
+
         // Apply scale modifier if present
         if (modifiers.scaleModifier) {
           params.scaleType = modifiers.scaleModifier;
         }
-        
+
         // Add instruments
         if (modifiers.instrumentAdd) {
           params.instrumentation = [
             ...new Set([...params.instrumentation, ...modifiers.instrumentAdd])
           ];
         }
-        
+
         // Apply reverb modifier
         if (modifiers.reverbModifier) {
           params.reverb = Math.min(Math.max(params.reverb + modifiers.reverbModifier, 0), 1);
         }
-        
+
         // Apply dynamics modifier
         if (modifiers.dynamics) {
           params.dynamics = modifiers.dynamics;
         }
-        
+
         // Apply density modifier
         if (modifiers.density) {
           params.density = modifiers.density;
         }
-        
+
         // Apply rhythm complexity
         if (modifiers.rhythmComplexity) {
           params.rhythmComplexity = modifiers.rhythmComplexity;
@@ -410,10 +411,10 @@ class MusicGenerationService {
         }
       }
     });
-    
+
     // Ensure tempo stays within reasonable bounds
     params.tempo = Math.min(Math.max(params.tempo, 40), 200);
-    
+
     return params;
   }
 
@@ -425,61 +426,61 @@ class MusicGenerationService {
    */
   private applyTextAnalysisModifiers(baseParameters: any, reflectionText: string): any {
     const params = { ...baseParameters };
-    
+
     // Simple keyword-based sentiment analysis
     const words = reflectionText.toLowerCase().split(/\s+/);
     let tempoModifier = 0;
     let scalePreference = '';
     let intensityModifier = 0;
-    
+
     // Count keyword occurrences and their influence
     words.forEach((word, index) => {
       // Clean the word of punctuation
       const cleanWord = word.replace(/[.,!?;:'"()]/g, '');
-      
+
       if (this.sentimentKeywords[cleanWord]) {
         const keywordEffect = this.sentimentKeywords[cleanWord];
-        
+
         // Apply tempo modifier
         if (keywordEffect.tempoModifier) {
           tempoModifier += keywordEffect.tempoModifier;
         }
-        
+
         // Track scale preference
         if (keywordEffect.scalePreference && !scalePreference) {
           scalePreference = keywordEffect.scalePreference;
         }
-        
+
         // Apply intensity modifier
         if (keywordEffect.intensityModifier) {
           // Check if this modifier applies to the previous or next word
           const prevWord = words[index - 1]?.replace(/[.,!?;:'"()]/g, '');
           const nextWord = words[index + 1]?.replace(/[.,!?;:'"()]/g, '');
-          
+
           if (this.sentimentKeywords[prevWord] || this.sentimentKeywords[nextWord]) {
             intensityModifier += keywordEffect.intensityModifier;
           }
         }
       }
     });
-    
+
     // Apply the accumulated modifiers
     params.tempo += tempoModifier;
-    
+
     // Apply scale preference if strong enough
     if (scalePreference && Math.random() < 0.7) {
       params.scaleType = scalePreference;
     }
-    
+
     // Apply intensity modifier to dynamics and density
     if (intensityModifier !== 0) {
       params.dynamics = Math.min(Math.max(params.dynamics + intensityModifier, 0.1), 1.0);
       params.density = Math.min(Math.max(params.density + intensityModifier, 0.1), 1.0);
     }
-    
+
     // Ensure tempo stays within reasonable bounds
     params.tempo = Math.min(Math.max(params.tempo, 40), 200);
-    
+
     return params;
   }
 
@@ -491,7 +492,7 @@ class MusicGenerationService {
    */
   createMusicGenerationRequest(userId: string, moodEntry: MoodEntry): any {
     const musicParameters = this.generateMusicParameters(moodEntry);
-    
+
     return {
       userId,
       entryId: moodEntry.entryId,
@@ -513,14 +514,14 @@ class MusicGenerationService {
   createGeneratedMusicObject(userId: string, moodEntry: MoodEntry, parameters: any): GeneratedMusic {
     // Extract key parameters for the music object
     const { tempo, keySignature, instrumentation } = parameters;
-    
+
     // Determine mood description based on mood rating
     let moodDescription = 'neutral';
     if (moodEntry.moodRating <= 3) moodDescription = 'melancholic';
     else if (moodEntry.moodRating <= 5) moodDescription = 'contemplative';
     else if (moodEntry.moodRating <= 7) moodDescription = 'uplifting';
     else moodDescription = 'joyful';
-    
+
     // Create the music object
     const generatedMusic: GeneratedMusic = {
       musicId: generateUUID(),
@@ -536,7 +537,7 @@ class MusicGenerationService {
         mood: moodDescription
       }
     };
-    
+
     return generatedMusic;
   }
 
@@ -555,7 +556,7 @@ class MusicGenerationService {
         if (!dirInfo.exists) {
           await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
         }
-        
+
         // Initialize audio
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
@@ -584,41 +585,41 @@ class MusicGenerationService {
         this.generationQueue.push({ userId, moodEntry });
         return null;
       }
-      
+
       this.generationInProgress = true;
-      
+
       // Generate music parameters
       const parameters = this.generateMusicParameters(moodEntry);
-      
+
       // Create music generation request
       const request = this.createMusicGenerationRequest(userId, moodEntry);
-      
+
       // Create music object
       const musicObject = this.createGeneratedMusicObject(userId, moodEntry, parameters);
-      
+
       // Generate the actual music
       const generatedMusic = await this.generateMusicFromAPI(request, musicObject, 0);
-      
+
       // Store the generated music (mood entry update is handled by MoodEntryService)
       if (isWeb) {
         await WebStorageService.storeGeneratedMusic(userId, generatedMusic);
       } else {
         await LocalStorageManager.storeGeneratedMusic(userId, generatedMusic);
       }
-      
+
       this.generationInProgress = false;
-      
+
       // Process next item in queue if any
       this.processNextInQueue();
-      
+
       return generatedMusic;
     } catch (error) {
       console.error('Failed to generate music:', error);
       this.generationInProgress = false;
-      
+
       // Process next item in queue if any
       this.processNextInQueue();
-      
+
       return null;
     }
   }
@@ -642,7 +643,7 @@ class MusicGenerationService {
    */
   private createMusicPrompt(moodEntry: MoodEntry): string {
     const { reflection } = moodEntry;
-    
+
     // Use only the reflection text as the prompt
     if (reflection && reflection.trim()) {
       return reflection.trim();
@@ -669,18 +670,18 @@ class MusicGenerationService {
         console.log('Starting AI-powered music generation...');
         console.log('Mood entry:', request.moodEntry);
       }
-      
+
       // Create text prompt from mood entry
       if (!request.moodEntry) {
         console.error('Mood entry is undefined in request:', request);
         throw new Error('Mood entry is required for music generation');
       }
-      
+
       const prompt = this.createMusicPrompt(request.moodEntry);
       if (isDebugMode()) {
         console.log('Generated prompt:', prompt);
       }
-      
+
       // Try ElevenLabs AI generation first
       if (this.AI_SERVICES.ELEVENLABS.enabled) {
         try {
@@ -691,9 +692,9 @@ class MusicGenerationService {
           }
         }
       }
-      
 
-      
+
+
       // Try other AI services if available
       if (this.AI_SERVICES.MUBERT.enabled) {
         try {
@@ -704,25 +705,25 @@ class MusicGenerationService {
           }
         }
       }
-      
+
       // Use enhanced procedural generation (AI models not available on free tier)
       if (isDebugMode()) {
         console.log('🎵 Using enhanced procedural music generation...');
         console.log('🎵 This creates sophisticated, mood-appropriate music using advanced algorithms');
       }
-      
+
       return await this.generateProceduralMusic(musicObject, request.moodEntry);
-      
+
     } catch (error) {
       console.error('Music generation error:', error);
-      
+
       // If this is not the last retry attempt, try again
       if (retryCount < this.MAX_RETRIES - 1) {
         console.log(`Retrying music generation (attempt ${retryCount + 1}/${this.MAX_RETRIES})...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
         return this.generateMusicFromAPI(request, musicObject, retryCount + 1);
       }
-      
+
       // If all retries failed, use fallback
       console.log('All retry attempts failed, using fallback');
       return await this.generateProceduralMusic(musicObject, request.moodEntry);
@@ -737,16 +738,16 @@ class MusicGenerationService {
       console.log('🎵 Trying ElevenLabs Sound Effects API via backend proxy...');
       console.log('🎵 Prompt:', prompt);
     }
-    
+
     try {
       // Convert mood prompt to a sound effects description
       const soundDescription = this.convertMoodToSoundDescription(prompt);
-      
+
       if (isDebugMode()) {
         console.log('🎵 Making request to backend:', `${API_CONFIG.BACKEND_URL}/api/music/generate`);
         console.log('🎵 Request payload:', { prompt: soundDescription, userId: musicObject.userId });
       }
-      
+
       // Use backend proxy instead of direct API call
       const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/music/generate`, {
         method: 'POST',
@@ -758,46 +759,42 @@ class MusicGenerationService {
           userId: musicObject.userId
         }),
       });
-      
+
       if (isDebugMode()) {
         console.log('🎵 Backend proxy response status:', response.status);
       }
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('🎵 Backend API Error:', response.status, errorData);
         throw new Error(`Backend API failed: ${response.status} ${errorData.error || response.statusText}`);
       }
-      
+
       const result = await response.json();
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Music generation failed');
       }
-      
-      // Convert base64 to array buffer
-      const audioData = atob(result.audioData);
-      const audioArray = new Uint8Array(audioData.length);
-      for (let i = 0; i < audioData.length; i++) {
-        audioArray[i] = audioData.charCodeAt(i);
-      }
-      
+
+      // Convert base64 to array buffer using our safe utility
+      const audioArray = base64ToUint8Array(result.audioData);
+
       // Create a mock blob object with the _data property that React Native expects
       const audioBlob = {
         _data: audioArray.buffer,
         size: audioArray.length,
         type: 'audio/mpeg'
       } as any;
-      
+
       if (isDebugMode()) {
         console.log('🎵 Backend audio received, size:', audioBlob.size, 'bytes');
         console.log('🎵 Audio blob type:', audioBlob.type);
       }
-      
+
       const audioUrl = await this.saveAudioFile(audioBlob, musicObject.musicId);
       musicObject.audioUrl = audioUrl;
       musicObject.duration = 8; // Set to 8 seconds as requested
-      
+
       // Update music parameters to reflect AI generation instead of procedural
       musicObject.musicParameters = {
         tempo: 120, // Default tempo for AI-generated ambient sounds
@@ -805,22 +802,22 @@ class MusicGenerationService {
         instruments: ['AI Generated Sound Effects'],
         mood: 'AI Generated'
       };
-      
+
       console.log('🎵 Successfully generated AI audio via backend proxy!');
       return musicObject;
-      
+
     } catch (error) {
       console.error('🎵 Backend API call failed:', error);
       throw error;
     }
   }
-  
 
-  
+
+
   private convertMoodToSoundDescription(prompt: string): string {
     // The prompt is now just the reflection text - return it directly
     const reflectionText = prompt.trim();
-    
+
     if (reflectionText) {
       return reflectionText;
     } else {
@@ -828,7 +825,7 @@ class MusicGenerationService {
       return "peaceful ambient soundscape";
     }
   }
-  
+
 
 
   /**
@@ -848,29 +845,29 @@ class MusicGenerationService {
       console.log('Generating enhanced procedural music...');
       console.log('Platform:', isWeb ? 'Web' : 'Mobile');
     }
-    
+
     try {
       // Generate music parameters based on mood
       const parameters = this.generateMusicParameters(moodEntry);
       console.log('Generated music parameters:', parameters);
-      
+
       // Add explicit platform detection debugging
       console.log('isWeb value:', isWeb);
       console.log('isReactNative value:', isReactNative);
       console.log('isExpoGo value:', isExpoGo);
       console.log('Platform detection:', typeof window !== 'undefined' ? 'Web detected' : 'Mobile detected');
-      
+
       // More reliable platform detection
       const isActuallyWeb = isWeb && !isReactNative && !isExpoGo;
       console.log('isActuallyWeb value:', isActuallyWeb);
-      
+
       if (isActuallyWeb) {
         // Use Web Audio API for sophisticated procedural generation
         console.log('Using Web Audio API for generation...');
         const audioUrl = await this.generateWebAudio(musicObject, 8);
         musicObject.audioUrl = audioUrl;
         musicObject.duration = 8;
-        
+
         if (isDebugMode()) {
           console.log('Enhanced procedural audio generated for web');
         }
@@ -880,12 +877,12 @@ class MusicGenerationService {
         const audioUrl = await this.createSimpleAudioFile(musicObject, parameters);
         musicObject.audioUrl = audioUrl;
         musicObject.duration = 8;
-        
+
         if (isDebugMode()) {
           console.log('Mood-appropriate audio file created for mobile:', audioUrl);
         }
       }
-      
+
       return musicObject;
     } catch (error) {
       console.error('Error in generateProceduralMusic:', error);
@@ -900,26 +897,26 @@ class MusicGenerationService {
     console.log('encodeBase64 called with array length:', uint8Array.length);
     const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     let base64String = '';
-    
+
     for (let i = 0; i < uint8Array.length; i += 3) {
       const byte1 = uint8Array[i] || 0;
       const byte2 = uint8Array[i + 1] || 0;
       const byte3 = uint8Array[i + 2] || 0;
-      
+
       const chunk = (byte1 << 16) | (byte2 << 8) | byte3;
-      
+
       base64String += base64Chars[(chunk >> 18) & 63] +
-                     base64Chars[(chunk >> 12) & 63] +
-                     base64Chars[(chunk >> 6) & 63] +
-                     base64Chars[chunk & 63];
+        base64Chars[(chunk >> 12) & 63] +
+        base64Chars[(chunk >> 6) & 63] +
+        base64Chars[chunk & 63];
     }
-    
+
     // Handle padding
     const padding = 3 - (uint8Array.length % 3);
     if (padding < 3) {
       base64String = base64String.slice(0, -padding) + '='.repeat(padding);
     }
-    
+
     console.log('encodeBase64 completed, result length:', base64String.length);
     return base64String;
   }
@@ -930,12 +927,12 @@ class MusicGenerationService {
   private async saveAudioFile(audioBlob: Blob, musicId: string): Promise<string> {
     // More reliable platform detection
     const isActuallyWeb = isWeb && !isReactNative && !isExpoGo;
-    
+
     try {
       if (isActuallyWeb) {
         // On web, store the blob data in localStorage and create a persistent URL
         let audioArrayBuffer: ArrayBuffer;
-        
+
         // Handle different blob types and methods
         if (audioBlob.arrayBuffer) {
           audioArrayBuffer = await audioBlob.arrayBuffer();
@@ -950,22 +947,22 @@ class MusicGenerationService {
           const encoder = new TextEncoder();
           audioArrayBuffer = encoder.encode(text).buffer as ArrayBuffer;
         }
-        
+
         const audioBase64 = this.encodeBase64(new Uint8Array(audioArrayBuffer));
-        
+
         // Store the base64 data in localStorage
         const storageKey = `audio_data_${musicId}`;
         localStorage.setItem(storageKey, audioBase64);
-        
+
         // Create a real Blob object for URL.createObjectURL
         const realBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
         const audioUrl = URL.createObjectURL(realBlob);
-        
+
         if (isDebugMode()) {
           console.log('Audio data stored with key:', storageKey);
           console.log('Audio blob URL created for web:', audioUrl);
         }
-        
+
         return audioUrl;
       } else {
         // On native platforms, save to file system
@@ -973,12 +970,12 @@ class MusicGenerationService {
         if (!dirInfo.exists) {
           await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
         }
-        
+
         // Use .mp3 extension for MP3 files from ElevenLabs
         const localFilePath = `${this.MUSIC_DIRECTORY}${musicId}.mp3`;
-        
+
         let audioArrayBuffer: ArrayBuffer;
-        
+
         // Handle different blob types and methods
         if ((audioBlob as any)._data) {
           // Our mock blob object from ElevenLabs or React Native response
@@ -994,12 +991,12 @@ class MusicGenerationService {
           const encoder = new TextEncoder();
           audioArrayBuffer = encoder.encode(text).buffer as ArrayBuffer;
         }
-        
+
         // For ElevenLabs MP3 data, try different approaches
         const audioData = new Uint8Array(audioArrayBuffer);
         console.log('🎵 Audio data length:', audioData.length);
         console.log('🎵 Audio data first 10 bytes:', Array.from(audioData.slice(0, 10)));
-        
+
         // Try writing as base64 first
         try {
           const audioBase64 = this.encodeBase64(audioData);
@@ -1015,11 +1012,11 @@ class MusicGenerationService {
           await FileSystem.writeAsStringAsync(localFilePath, binaryString);
           console.log('🎵 MP3 file saved using binary string method');
         }
-        
+
         if (isDebugMode()) {
           console.log('Audio file saved to:', localFilePath);
         }
-        
+
         return localFilePath;
       }
     } catch (error) {
@@ -1030,43 +1027,43 @@ class MusicGenerationService {
     }
   }
 
-    /**
-   * Create a mood-appropriate audio file for mobile platforms
-   */
+  /**
+ * Create a mood-appropriate audio file for mobile platforms
+ */
   private async createSimpleAudioFile(musicObject: GeneratedMusic, parameters: any): Promise<string> {
     try {
       console.log('Starting mobile audio file creation...');
       console.log('Music object:', musicObject);
       console.log('Parameters:', parameters);
       console.log('Step 1: Creating WAV file buffer...');
-      
+
       // Create a simple WAV file with mood-appropriate music
       const sampleRate = 44100;
       const duration = 8; // 8 seconds
       const numSamples = sampleRate * duration;
-      
+
       console.log('Step 2: Extracting mood parameters...');
       // Extract mood parameters with safe defaults
       const { tempo = 120, keySignature = 'A major', dynamics = 0.7 } = parameters || {};
       const mood = musicObject.musicParameters?.mood || 'neutral';
       const baseFreq = this.getBaseFrequency(keySignature);
-      
+
       console.log('Step 3: Generating melody notes...');
       // Generate melody notes based on mood
       const notes = this.generateMelody(mood, tempo, duration);
-      
+
       console.log('Step 4: Creating WAV file buffer...');
       // Create WAV file buffer
       const buffer = new ArrayBuffer(44 + numSamples * 2); // 44 bytes header + 16-bit samples
       const view = new DataView(buffer);
-      
+
       // Write WAV header
       const writeString = (offset: number, string: string) => {
         for (let i = 0; i < string.length; i++) {
           view.setUint8(offset + i, string.charCodeAt(i));
         }
       };
-      
+
       writeString(0, 'RIFF');
       view.setUint32(4, 36 + numSamples * 2, true);
       writeString(8, 'WAVE');
@@ -1080,12 +1077,12 @@ class MusicGenerationService {
       view.setUint16(34, 16, true);
       writeString(36, 'data');
       view.setUint32(40, numSamples * 2, true);
-      
+
       // Generate audio data with melody
       for (let i = 0; i < numSamples; i++) {
         const time = i / sampleRate;
         let sample = 0;
-        
+
         // Add melody notes
         notes.forEach(note => {
           if (time >= note.start && time < note.end) {
@@ -1094,35 +1091,35 @@ class MusicGenerationService {
             sample += amplitude * Math.sin(2 * Math.PI * freq * time);
           }
         });
-        
+
         // Add harmonics for richer sound
         sample += 0.15 * Math.sin(2 * Math.PI * baseFreq * 2 * time);
         sample += 0.1 * Math.sin(2 * Math.PI * baseFreq * 3 * time);
-        
+
         // Add bass line
         sample += 0.2 * Math.sin(2 * Math.PI * baseFreq * 0.5 * time);
-        
+
         // Apply envelope
         const envelope = this.getEnvelope(time, duration);
         sample *= envelope;
-        
+
         // Clamp to prevent distortion
         sample = Math.max(-0.8, Math.min(0.8, sample));
-        
+
         // Convert to 16-bit integer
         const sample16 = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
         view.setInt16(44 + i * 2, sample16, true);
       }
-      
+
       console.log('Step 5: Saving to file system...');
       // Save to file system
       const dirInfo = await FileSystem.getInfoAsync(this.MUSIC_DIRECTORY);
       if (!dirInfo.exists) {
         await FileSystem.makeDirectoryAsync(this.MUSIC_DIRECTORY, { intermediates: true });
       }
-      
+
       const localFilePath = `${this.MUSIC_DIRECTORY}${musicObject.musicId}.wav`;
-      
+
       console.log('Step 6: Converting buffer to base64...');
       // Convert buffer to base64 string using custom function
       const uint8Array = new Uint8Array(buffer);
@@ -1152,13 +1149,13 @@ class MusicGenerationService {
   private async generateFallbackMusic(musicObject: GeneratedMusic): Promise<GeneratedMusic> {
     try {
       console.log('Generating fallback music due to API failure...');
-      
+
       let localFilePath: string;
       const duration = 8; // 8 seconds of generated music
-      
+
       // More reliable platform detection
       const isActuallyWeb = isWeb && !isReactNative && !isExpoGo;
-      
+
       if (isActuallyWeb) {
         // On web, generate a more sophisticated audio using Web Audio API
         localFilePath = await this.generateWebAudio(musicObject, duration);
@@ -1176,23 +1173,23 @@ class MusicGenerationService {
           reflection: 'Generated music',
           musicGenerated: false,
         };
-        
+
         const parameters = this.generateMusicParameters(mockMoodEntry);
         localFilePath = await this.createSimpleAudioFile(musicObject, parameters);
         console.log('Fallback mood-appropriate audio created for mobile:', localFilePath);
       }
-      
+
       // Update the music object with fallback information
       const updatedMusicObject: GeneratedMusic = {
         ...musicObject,
         audioUrl: localFilePath,
         duration: duration,
       };
-      
+
       return updatedMusicObject;
     } catch (error) {
       console.error('Fallback music generation failed:', error);
-      
+
       // If even the fallback fails, return the original object with an empty audio URL
       return {
         ...musicObject,
@@ -1213,7 +1210,7 @@ class MusicGenerationService {
       try {
         // Create audio context
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        
+
         // Resume audio context if it's suspended (required for web browsers)
         if (audioContext.state === 'suspended') {
           audioContext.resume().then(() => {
@@ -1222,26 +1219,26 @@ class MusicGenerationService {
             console.error('Failed to resume audio context:', error);
           });
         }
-        
+
         const sampleRate = audioContext.sampleRate;
         const numSamples = sampleRate * duration;
-        
+
         // Create audio buffer
         const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
         const channelData = audioBuffer.getChannelData(0);
-        
+
         // Generate music based on mood parameters with safe defaults
         const { tempo = 120, key = 'A major', instruments = [], mood = 'neutral' } = musicObject.musicParameters || {};
-        
+
         // Create a simple melody based on mood
         const baseFreq = this.getBaseFrequency(key);
         const notes = this.generateMelody(mood, tempo, duration);
-        
+
         // Generate audio samples
         for (let i = 0; i < numSamples; i++) {
           const time = i / sampleRate;
           let sample = 0;
-          
+
           // Add melody notes
           notes.forEach(note => {
             if (time >= note.start && time < note.end) {
@@ -1250,27 +1247,27 @@ class MusicGenerationService {
               sample += amplitude * Math.sin(2 * Math.PI * freq * time);
             }
           });
-          
+
           // Add some harmonics for richer sound
           sample += 0.2 * Math.sin(2 * Math.PI * baseFreq * 2 * time);
           sample += 0.1 * Math.sin(2 * Math.PI * baseFreq * 3 * time);
-          
+
           // Add a bass line for more presence
           sample += 0.15 * Math.sin(2 * Math.PI * baseFreq * 0.5 * time);
-          
+
           // Apply envelope
           const envelope = this.getEnvelope(time, duration);
           sample *= envelope;
-          
+
           // Clamp to prevent distortion but allow more volume
           channelData[i] = Math.max(-0.9, Math.min(0.9, sample));
         }
-        
+
         // Convert to WAV
         const wavBuffer = this.audioBufferToWav(audioBuffer);
         const blob = new Blob([wavBuffer], { type: 'audio/wav' });
         const url = URL.createObjectURL(blob);
-        
+
         // Store the audio data in localStorage for later retrieval
         const reader = new FileReader();
         reader.onload = () => {
@@ -1281,7 +1278,7 @@ class MusicGenerationService {
           console.log('Stored audio data for music ID:', musicObject.musicId);
         };
         reader.readAsDataURL(blob);
-        
+
         resolve(url);
       } catch (error) {
         console.error('Web Audio generation failed:', error);
@@ -1290,29 +1287,29 @@ class MusicGenerationService {
           const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
           const sampleRate = audioContext.sampleRate;
           const numSamples = sampleRate * duration;
-          
+
           // Create audio buffer for fallback
           const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
           const channelData = audioBuffer.getChannelData(0);
-          
+
           // Generate a simple sine wave
           const frequency = 440; // A4 note
           const amplitude = 0.3;
-          
+
           for (let i = 0; i < numSamples; i++) {
             const time = i / sampleRate;
             const sample = amplitude * Math.sin(2 * Math.PI * frequency * time);
-            
+
             // Apply envelope
             const envelope = this.getEnvelope(time, duration);
             channelData[i] = sample * envelope;
           }
-          
+
           // Convert to WAV
           const wavBuffer = this.audioBufferToWav(audioBuffer);
           const blob = new Blob([wavBuffer], { type: 'audio/wav' });
           const url = URL.createObjectURL(blob);
-          
+
           // Store the fallback audio data
           const reader = new FileReader();
           reader.onload = () => {
@@ -1323,21 +1320,21 @@ class MusicGenerationService {
             console.log('Stored fallback audio data for music ID:', musicObject.musicId);
           };
           reader.readAsDataURL(blob);
-          
+
           resolve(url);
         } catch (fallbackError) {
           console.error('Fallback audio generation also failed:', fallbackError);
           // Create a minimal silent audio file as last resort
           const silentBuffer = new ArrayBuffer(44 + 44100 * duration * 2);
           const view = new DataView(silentBuffer);
-          
+
           // Write minimal WAV header
           const writeString = (offset: number, string: string) => {
             for (let i = 0; i < string.length; i++) {
               view.setUint8(offset + i, string.charCodeAt(i));
             }
           };
-          
+
           writeString(0, 'RIFF');
           view.setUint32(4, 36 + 44100 * duration * 2, true);
           writeString(8, 'WAVE');
@@ -1351,10 +1348,10 @@ class MusicGenerationService {
           view.setUint16(34, 16, true);
           writeString(36, 'data');
           view.setUint32(40, 44100 * duration * 2, true);
-          
+
           const blob = new Blob([silentBuffer], { type: 'audio/wav' });
           const url = URL.createObjectURL(blob);
-          
+
           // Store the silent audio data
           const reader = new FileReader();
           reader.onload = () => {
@@ -1365,7 +1362,7 @@ class MusicGenerationService {
             console.log('Stored silent audio data for music ID:', musicObject.musicId);
           };
           reader.readAsDataURL(blob);
-          
+
           resolve(url);
         }
       }
@@ -1381,7 +1378,7 @@ class MusicGenerationService {
       'E': 329.63, 'F': 349.23, 'F#': 369.99, 'G': 392.00,
       'G#': 415.30, 'A': 440.00, 'A#': 466.16, 'B': 493.88
     };
-    
+
     // Ensure key is a string and has a default value
     const safeKey = (key || 'A major').toString();
     const keyName = safeKey.split(' ')[0];
@@ -1400,14 +1397,14 @@ class MusicGenerationService {
     const notes = [];
     const beatDuration = 60 / tempo;
     const numBeats = Math.floor(duration / beatDuration);
-    
+
     // Ensure mood is a string and has a default value
     const safeMood = (mood || 'neutral').toString().toLowerCase();
-    
+
     for (let i = 0; i < numBeats; i++) {
       const start = i * beatDuration;
       const end = start + beatDuration * 0.8;
-      
+
       // Generate pitch based on mood
       let pitch = 0;
       if (safeMood.includes('joyful') || safeMood.includes('uplifting') || safeMood.includes('happy')) {
@@ -1417,7 +1414,7 @@ class MusicGenerationService {
       } else {
         pitch = [0, 5, 7, 12][i % 4]; // Pentatonic scale (neutral)
       }
-      
+
       notes.push({
         start,
         end,
@@ -1425,7 +1422,7 @@ class MusicGenerationService {
         velocity: 0.5 + Math.random() * 0.3
       });
     }
-    
+
     return notes;
   }
 
@@ -1435,7 +1432,7 @@ class MusicGenerationService {
   private getEnvelope(time: number, duration: number): number {
     const attack = 0.1;
     const release = 0.3;
-    
+
     if (time < attack) {
       return time / attack;
     } else if (time > duration - release) {
@@ -1453,14 +1450,14 @@ class MusicGenerationService {
     const channels = buffer.numberOfChannels;
     const arrayBuffer = new ArrayBuffer(44 + length * channels * 2);
     const view = new DataView(arrayBuffer);
-    
+
     // Write WAV header
     const writeString = (offset: number, string: string) => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }
     };
-    
+
     writeString(0, 'RIFF');
     view.setUint32(4, 36 + length * channels * 2, true);
     writeString(8, 'WAVE');
@@ -1474,7 +1471,7 @@ class MusicGenerationService {
     view.setUint16(34, 16, true);
     writeString(36, 'data');
     view.setUint32(40, length * channels * 2, true);
-    
+
     // Write audio data
     let offset = 44;
     for (let i = 0; i < length; i++) {
@@ -1484,7 +1481,7 @@ class MusicGenerationService {
         offset += 2;
       }
     }
-    
+
     return arrayBuffer;
   }
 
@@ -1497,10 +1494,10 @@ class MusicGenerationService {
   async playMusic(musicId: string, userId: string): Promise<boolean> {
     try {
       console.log('playMusic called with musicId:', musicId, 'userId:', userId);
-      
+
       // Stop any currently playing music
       await this.stopMusic();
-      
+
       // Retrieve the music object using appropriate storage service
       let musicObject;
       if (isWeb) {
@@ -1508,16 +1505,16 @@ class MusicGenerationService {
       } else {
         musicObject = await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
       }
-      
+
       console.log('Retrieved music object:', musicObject);
-      
+
       if (!musicObject || !musicObject.audioUrl) {
         console.error('Music not found or has no audio URL');
         return false;
       }
-      
+
       console.log('Audio URL:', musicObject.audioUrl);
-      
+
       // For mobile, verify the file exists
       if (!isWeb) {
         try {
@@ -1535,7 +1532,7 @@ class MusicGenerationService {
                 musicObject = await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
               }
               console.log('Retrieved updated music object after regeneration:', musicObject);
-              
+
               // Check if musicObject is still null after regeneration
               if (!musicObject || !musicObject.audioUrl) {
                 console.error('Music object still null after regeneration');
@@ -1550,31 +1547,27 @@ class MusicGenerationService {
           return false;
         }
       }
-      
+
       // Create and load the sound object
       this.soundObject = new Audio.Sound();
       console.log('Created Audio.Sound object');
-      
+
       // For web, handle blob URLs specially
       if (isWeb && musicObject.audioUrl.startsWith('blob:')) {
         console.log('Handling blob URL for web');
-        
+
         // Try to get the audio data from localStorage and regenerate blob URL
         const storageKey = `audio_data_${musicId}`;
         const storedAudioData = localStorage.getItem(storageKey);
-        
+
         console.log('Stored audio data found:', !!storedAudioData);
-        
+
         if (storedAudioData) {
-          // Convert base64 back to blob and create new URL
-          const audioBytes = atob(storedAudioData);
-          const audioArray = new Uint8Array(audioBytes.length);
-          for (let i = 0; i < audioBytes.length; i++) {
-            audioArray[i] = audioBytes.charCodeAt(i);
-          }
+          // Convert base64 back to blob and create new URL using our safe utility
+          const audioArray = base64ToUint8Array(storedAudioData);
           const audioBlob = new Blob([audioArray], { type: 'audio/wav' });
           const newBlobUrl = URL.createObjectURL(audioBlob);
-          
+
           console.log('Regenerated blob URL:', newBlobUrl);
           await this.soundObject.loadAsync({ uri: newBlobUrl });
         } else {
@@ -1585,9 +1578,9 @@ class MusicGenerationService {
         console.log('Loading audio with URL:', musicObject.audioUrl);
         await this.soundObject.loadAsync({ uri: musicObject.audioUrl });
       }
-      
+
       console.log('Audio loaded successfully');
-      
+
       // Set up playback status update callback
       this.soundObject.setOnPlaybackStatusUpdate(async status => {
         console.log('Playback status update:', status);
@@ -1603,7 +1596,7 @@ class MusicGenerationService {
           }
         }
       });
-      
+
       // Start playback
       console.log('Starting playback...');
       try {
@@ -1615,7 +1608,7 @@ class MusicGenerationService {
             await audioContext.resume();
           }
         }
-        
+
         // For mobile, ensure audio mode is set correctly
         if (!isWeb) {
           await Audio.setAudioModeAsync({
@@ -1626,12 +1619,12 @@ class MusicGenerationService {
             playThroughEarpieceAndroid: false,
           });
         }
-        
+
         await this.soundObject.playAsync();
         this.isPlaying = true;
         this.currentMusicId = musicId;
         console.log('Playback started successfully');
-        
+
         // Get initial status to verify playback
         const status = await this.soundObject.getStatusAsync();
         console.log('Initial playback status:', status);
@@ -1641,7 +1634,7 @@ class MusicGenerationService {
         this.currentMusicId = null;
         throw playError;
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to play music:', error);
@@ -1723,7 +1716,7 @@ class MusicGenerationService {
       volume: this.volume
     };
   }
-  
+
   /**
    * Set repeat mode
    * @param enabled Whether repeat mode should be enabled
@@ -1731,7 +1724,7 @@ class MusicGenerationService {
   setRepeatMode(enabled: boolean): void {
     this.isRepeatEnabled = enabled;
   }
-  
+
   /**
    * Set volume level
    * @param volume Volume level (0.0 to 1.0)
@@ -1741,19 +1734,19 @@ class MusicGenerationService {
     try {
       // Ensure volume is between 0 and 1
       this.volume = Math.min(Math.max(volume, 0), 1);
-      
+
       // Apply volume to current sound object if it exists
       if (this.soundObject) {
         await this.soundObject.setVolumeAsync(this.volume);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to set volume:', error);
       return false;
     }
   }
-  
+
   /**
    * Get current playback position in seconds
    * @returns Current position in seconds or null if not playing
@@ -1763,20 +1756,20 @@ class MusicGenerationService {
       if (!this.soundObject || !this.isPlaying) {
         return null;
       }
-      
+
       const status = await this.soundObject.getStatusAsync();
       if (status.isLoaded) {
         // Convert milliseconds to seconds
         return status.positionMillis / 1000;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to get playback position:', error);
       return null;
     }
   }
-  
+
   /**
    * Seek to a specific position in the audio
    * @param position Position in seconds to seek to
@@ -1787,7 +1780,7 @@ class MusicGenerationService {
       if (!this.soundObject) {
         return false;
       }
-      
+
       // Convert seconds to milliseconds
       const positionMillis = position * 1000;
       await this.soundObject.setPositionAsync(positionMillis);
@@ -1845,7 +1838,7 @@ class MusicGenerationService {
       if (this.currentMusicId === musicId) {
         await this.stopMusic();
       }
-      
+
       // Get the music object using appropriate storage service
       let musicObject;
       if (isWeb) {
@@ -1853,11 +1846,11 @@ class MusicGenerationService {
       } else {
         musicObject = await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
       }
-      
+
       if (!musicObject) {
         return false;
       }
-      
+
       // Delete the audio file if it exists
       if (musicObject.audioUrl) {
         const fileInfo = await FileSystem.getInfoAsync(musicObject.audioUrl);
@@ -1865,7 +1858,7 @@ class MusicGenerationService {
           await FileSystem.deleteAsync(musicObject.audioUrl);
         }
       }
-      
+
       // Remove from storage using appropriate storage service
       if (isWeb) {
         // For web, remove from localStorage
@@ -1875,7 +1868,7 @@ class MusicGenerationService {
         // For native, use LocalStorageManager
         await LocalStorageManager.removeData(`generated_music_${userId}_${musicId}`);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to delete music:', error);
@@ -1891,7 +1884,7 @@ class MusicGenerationService {
   async debugMusicGeneration(userId: string): Promise<GeneratedMusic | null> {
     try {
       console.log('=== DEBUG: Testing Music Generation ===');
-      
+
       // Create a test mood entry
       const testMoodEntry: MoodEntry = {
         entryId: generateUUID(),
@@ -1903,16 +1896,16 @@ class MusicGenerationService {
         reflection: 'This is a test mood entry for debugging music generation',
         musicGenerated: false
       };
-      
+
       console.log('Test mood entry created:', testMoodEntry);
-      
+
       // Initialize the service
       await this.initialize();
       console.log('Music generation service initialized');
-      
+
       // Generate music
       const result = await this.generateMusic(userId, testMoodEntry);
-      
+
       if (result) {
         console.log('Music generation successful:', result);
         return result;
@@ -1953,7 +1946,7 @@ class MusicGenerationService {
   async regenerateAudioFile(musicId: string, userId: string): Promise<boolean> {
     try {
       console.log('Regenerating audio file for musicId:', musicId);
-      
+
       // Retrieve the music object
       let musicObject;
       if (isWeb) {
@@ -1961,12 +1954,12 @@ class MusicGenerationService {
       } else {
         musicObject = await LocalStorageManager.retrieveGeneratedMusic(userId, musicId);
       }
-      
+
       if (!musicObject) {
         console.error('Music object not found for regeneration');
         return false;
       }
-      
+
       // Create a mock mood entry for regeneration
       const mockMoodEntry: MoodEntry = {
         entryId: musicObject.entryId,
@@ -1978,21 +1971,21 @@ class MusicGenerationService {
         reflection: 'Regenerated music',
         musicGenerated: false,
       };
-      
+
       // Generate new audio file
       const parameters = this.generateMusicParameters(mockMoodEntry);
       const audioUrl = await this.createSimpleAudioFile(musicObject, parameters);
-      
+
       // Update the music object with the new audio URL
       musicObject.audioUrl = audioUrl;
-      
+
       // Store the updated music object
       if (isWeb) {
         await WebStorageService.storeGeneratedMusic(userId, musicObject);
       } else {
         await LocalStorageManager.storeGeneratedMusic(userId, musicObject);
       }
-      
+
       console.log('Audio file regenerated successfully:', audioUrl);
       return true;
     } catch (error) {
