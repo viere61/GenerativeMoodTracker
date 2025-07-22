@@ -11,20 +11,18 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 - **Settings**: Change your preferred time range, notification settings, and more
 
 ### Email Notifications
+- Actually useless because it only works when you are actively on the app, so no need to enable it.
 - **Automatic Reminders**: Receive email reminders when you open the app during your preferred time window (if you haven't logged today)
-- **Time Window Respect**: Reminders only sent during your configured time range (e.g., 21:00-22:00)
-- **Smart Detection**: Automatically detects if you've already logged a mood today
-- **Weekly Reports**: Optional weekly mood statistics and insights
 - **Test Emails**: Verify email configuration with test emails
 - **Backend Integration**: Deployed on Railway with SendGrid email service
 
 ### AI Sound Effects System
-- **AI-Powered Sound Effects**: Generates unique sound effects using ElevenLabs Sound Effects API
-- **Mood-Based Audio**: Sound effect parameters are dynamically adjusted based on:
-  - Mood rating (1-10 scale)
-  - Selected emotion tags
-  - Reflection text sentiment analysis
-  - Emotional context and atmosphere
+- **AI-Powered Sound Generation**: Generates unique sound effects based on your reflection text using ElevenLabs Sound Generation API
+- **Multiple AI Services**: Fallback to alternative services if primary service is unavailable:
+  - ElevenLabs Sound Generation API (primary)
+  - Replicate MusicGen (fallback)
+  - Hugging Face Inference API (fallback)
+  - If your API key is not configured correctly, you should still get an audio based on your mood, but it's not AI generated.
 
 ### Audio Features
 - **Real-time Playback**: Play, pause, resume, and stop generated sound effects
@@ -33,57 +31,90 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 - **Repeat Mode**: Loop audio playback
 - **Cross-platform Storage**: Audio data persists across sessions using platform-appropriate storage
 
-## AI Sound Effects Generation System
+# Getting Started
 
-The app generates AI-powered sound effects using ElevenLabs Sound Effects API, creating unique audio experiences based on your mood entries:
+## Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Expo CLI (`npm install -g expo-cli`)
+- ElevenLabs API key (for AI sound generation)
 
-### How It Works
-1. **Mood Analysis**: Analyzes the user's mood entry to determine sound effect parameters
-2. **AI Prompt Generation**: Creates detailed prompts for ElevenLabs API based on:
-   - **Mood Rating**: Emotional intensity and energy level
-   - **Emotion Tags**: Specific emotions like "joyful", "melancholic", "energetic"
-   - **Reflection Text**: Sentiment analysis of user's written reflection
-   - **Musical Context**: References to musical elements and atmosphere
+## Setup Instructions
 
-3. **ElevenLabs API Integration**: Uses ElevenLabs Sound Effects API to generate:
-   - **Unique Sound Effects**: AI-generated audio based on mood prompts
-   - **Mood-Appropriate Audio**: Tailored to match the user's emotional state
-   - **High-Quality Output**: Professional-grade sound effects
+### 1. Clone the Repository
+```sh
+git clone https://github.com/yourusername/GenerativeMoodTracker.git
+cd GenerativeMoodTracker
+```
 
-4. **Audio Processing**: Handles MP3 audio data and converts for cross-platform compatibility
-5. **Storage**: Stores audio files locally for persistent playback across app sessions
+### 2. Install Dependencies
+```sh
+npm install
+```
 
-### AI Intelligence
-The system leverages ElevenLabs' advanced AI to create mood-appropriate sound effects:
-- **Emotional Mapping**: Translates mood ratings and emotions into descriptive sound effect prompts
-- **Context Awareness**: Incorporates reflection text to create more personalized audio experiences
-- **Cross-Platform Compatibility**: Handles React Native and web environments seamlessly
-- **Persistent Storage**: Audio files are saved locally and persist across app sessions
+### 3. Configure Environment Variables
+Create a `.env` file in the root directory with:
+```
+# Frontend Environment Variables
+EXPO_PUBLIC_BACKEND_URL=http://localhost:3001
+EXPO_PUBLIC_DEBUG_MODE=false
 
-## Setup
+# If running locally with backend
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+```
 
-1. **Clone the repo:**
-   ```sh
-   git clone https://github.com/viere61/GenerativeMoodTracker.git
-   cd GenerativeMoodTracker
-   ```
+### 4. Configure Backend (if self-hosting)
+```sh
+cd backend
+cp env.example .env
+```
 
-2. **Install dependencies:**
-   ```sh
-   npm install
-   ```
+Edit the `.env` file with your API keys:
+```
+# ElevenLabs API (required for AI sound generation)
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
 
-3. **Start the app:**
-   - For mobile (Expo Go):
-     ```sh
-     npx expo start
-     ```
-   - For web:
-     ```sh
-     npx expo start --web
-     ```
+# Optional alternative services
+REPLICATE_API_TOKEN=your_replicate_token
+HUGGINGFACE_API_TOKEN=your_huggingface_token
 
-4. **Scan the QR code** with Expo Go (iOS/Android) or open [http://localhost:8081](http://localhost:8081) in your browser.
+# Email notifications (optional)
+SENDGRID_API_KEY=your_sendgrid_api_key
+FROM_EMAIL=noreply@yourdomain.com
+FROM_NAME=Generative Mood Tracker
+```
+
+### 5. Start the Backend (if self-hosting)
+```sh
+cd backend
+npm install
+npm start
+```
+
+### 6. Start the App
+- **For Web:**
+  ```sh
+  npx expo start
+  ```
+  Open [http://localhost:8081](http://localhost:8081) in your browser
+
+- **For Mobile (Expo Go):**
+  ```sh
+  npx expo start
+  ```
+  Scan the QR code with Expo Go app on your device
+
+### 7. Deploy to Railway (optional)
+1. Create a Railway account
+2. Create a new project
+3. Add the following environment variables:
+   - `ELEVENLABS_API_KEY`
+   - `PORT=3001`
+   - `SENDGRID_API_KEY` (optional)
+   - `FROM_EMAIL` (optional)
+   - `FROM_NAME` (optional)
+4. Deploy the backend folder to Railway
+5. Update your frontend to use the Railway URL
 
 ## Technical Architecture
 
@@ -103,7 +134,7 @@ The system leverages ElevenLabs' advanced AI to create mood-appropriate sound ef
 
 ### Sound Effects Generation Pipeline
 1. User creates mood entry
-2. System generates AI prompt based on mood data
+2. Your reflection text will be the prompt (not effected by mood data)
 3. ElevenLabs API creates unique sound effect
 4. Audio data is processed and stored locally
 5. Audio player loads and plays the generated sound effect
@@ -111,24 +142,14 @@ The system leverages ElevenLabs' advanced AI to create mood-appropriate sound ef
 ## Known Issues & Limitations
 
 ### Current Issues
-- **Notifications**: Not working in Expo Go (requires development build)
-- **Web Audio Context**: May require user interaction to resume suspended context
-- **Email Reminders**: Only work when app is open (push notifications needed for background reminders)
+- **QR Code Scanning**: May have issues when scanning Expo QR code with iPhone camera
 
 ### Technical Limitations
-- **API Dependencies**: Requires ElevenLabs API access for AI music generation
-- **Browser Compatibility**: Web Audio API support varies across browsers
-- **Storage Limits**: localStorage has size limitations for audio data
-- **Mobile Performance**: Audio processing may impact mobile performance
+- **API Dependencies**: Requires ElevenLabs API key
 
 ### Planned Improvements
-- **Enhanced AI Prompts**: Improve prompt engineering for better sound effects generation
-- **Multiple AI Services**: Integrate with additional sound effects generation APIs
-- **Offline Support**: Better offline sound effects generation capabilities
-- **Audio Effects**: Add reverb, delay, and other audio effects
-- **Export Features**: Allow users to download generated sound effects
-- **Push Notifications**: Background reminders when app is not running
-- **Enhanced Email Features**: More sophisticated email templates and scheduling
+- delete email notification implementation
+- "what influences you" section doesn't display properly on Android devices
 
 ## Development
 
@@ -142,19 +163,15 @@ The system leverages ElevenLabs' advanced AI to create mood-appropriate sound ef
 - **Integration Tests**: End-to-end testing of music generation flow
 - **Cross-platform Testing**: Verified on web, iOS, and Android
 
+### Cleanup (Optional)
+The following test/debug files can be safely removed if not needed:
+- `backend/test-elevenlabs.js` - Test script for ElevenLabs API
+- `e2e/` directory - End-to-end test files
+- `src/integration-tests/` directory - Integration test files
+- `src/*/__tests__/` directories - Unit test files
+
 ## Repository
 
 [https://github.com/viere61/GenerativeMoodTracker](https://github.com/viere61/GenerativeMoodTracker)
 
-## Contributing
-
-Feel free to fork, contribute, or open issues! Areas for contribution:
-- Enhanced AI sound effects generation prompts
-- Additional sound effects generation APIs
-- UI/UX improvements
-- Performance optimizations
-- Additional mood tracking features
-
 ---
-
-**Note**: This app demonstrates AI-powered sound effects generation using ElevenLabs Sound Effects API. The system creates unique, mood-appropriate audio experiences based on your emotional state and reflections. 
