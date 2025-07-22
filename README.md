@@ -6,7 +6,7 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 
 ### Core Mood Tracking
 - **Mood Logging**: Log your mood (1-10 scale), select emotion tags, and write a reflection
-- **Time Window System**: Log your mood only during a random 1-hour window within your preferred time range each day
+- **Time Window System**: Log your mood only during a random 1-hour window within your preferred time range each day (You will get a push notification when the logging window is open)
 - **Mood History**: View your mood entries and trends over time with detailed analytics
 - **Settings**: Change your preferred time range, notification settings, and more
 
@@ -18,11 +18,7 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 
 ### AI Sound Effects System
 - **AI-Powered Sound Generation**: Generates unique sound effects based on your reflection text using ElevenLabs Sound Generation API
-- **Multiple AI Services**: Fallback to alternative services if primary service is unavailable:
-  - ElevenLabs Sound Generation API (primary)
-  - Replicate MusicGen (fallback)
-  - Hugging Face Inference API (fallback)
-  - If your API key is not configured correctly, you should still get an audio based on your mood, but it's not AI generated.
+- If your API key is not configured correctly, you should still get an audio based on your mood, but it's not AI generated.
 
 ### Audio Features
 - **Real-time Playback**: Play, pause, resume, and stop generated sound effects
@@ -33,17 +29,47 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 
 # Getting Started
 
-## Prerequisites
+## Quick Setup (Recommended)
+
+If you don't have Node.js and npm installed, download it here: https://nodejs.org/en/download
+
+We've created a quick setup script that automates most of the installation process:
+
+```sh
+# Clone the repository
+git clone https://github.com/viere61/GenerativeMoodTracker.git
+cd GenerativeMoodTracker
+
+# Make the setup script executable
+chmod +x setup.sh
+
+# Run the setup script
+./setup.sh
+```
+
+The script will:
+1. Check if Node.js is installed (v16+ required)
+2. Install frontend dependencies
+3. Create frontend environment file
+4. Install backend dependencies
+5. Create backend environment file
+
+After running the script, run this command line to start the app:
+```sh
+npx expo start
+```
+
+## Manual Setup
+
+### Prerequisites
 - Node.js (v16 or higher)
 - npm or yarn
 - Expo CLI (`npm install -g expo-cli`)
 - ElevenLabs API key (for AI sound generation)
 
-## Setup Instructions
-
 ### 1. Clone the Repository
 ```sh
-git clone https://github.com/yourusername/GenerativeMoodTracker.git
+git clone https://github.com/viere61/GenerativeMoodTracker.git
 cd GenerativeMoodTracker
 ```
 
