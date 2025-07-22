@@ -10,7 +10,7 @@ A cross-platform (Expo/React Native) app for mood tracking, reflection, and AI-i
 - **Mood History**: View your mood entries and trends over time with detailed analytics
 - **Settings**: Change your preferred time range, notification settings, and more
 
-### Email Notifications
+### Email Notifications (ignore this)
 - Actually useless because it only works when you are actively on the app, so no need to enable it.
 - **Automatic Reminders**: Receive email reminders when you open the app during your preferred time window (if you haven't logged today)
 - **Test Emails**: Verify email configuration with test emails
@@ -58,6 +58,11 @@ After running the script, run this command line to start the app:
 ```sh
 npx expo start
 ```
+
+For using this app on your mobile device:
+Download Expo Go at App Store.
+Scan the QR code to start the app.
+Note: If you got "No useable data found" on your iPhone when scanning the QR code, press s in terminal, then try to scan again.
 
 ## Manual Setup
 
