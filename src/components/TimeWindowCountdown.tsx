@@ -68,8 +68,20 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
       }
       
       // Calculate time remaining
-      const remaining = getTimeUntilNextWindow(nextWindowTime);
-      setTimeRemaining(remaining);
+      const diffMs = Math.max(0, nextWindowTime - currentTime);
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      // Log the actual time calculation
+      console.log('Time remaining calculation:', {
+        currentTime: new Date(currentTime).toLocaleString(),
+        nextWindowTime: new Date(nextWindowTime).toLocaleString(),
+        diffMs,
+        hours,
+        minutes
+      });
+      
+      setTimeRemaining({ hours, minutes });
     };
     
     // Initial update
@@ -90,7 +102,13 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
     
     const { hours, minutes } = timeRemaining;
     
-    if (hours > 0) {
+    // Calculate the actual hours until the next window
+    const actualHours = Math.floor((nextWindowTime - Date.now()) / (1000 * 60 * 60));
+    
+    if (actualHours > 24) {
+      // If it's more than 24 hours away, show the actual hours
+      return `${actualHours}h ${minutes}m`;
+    } else if (hours > 0) {
       return `${hours}h ${minutes}m`;
     } else {
       return `${minutes}m`;
@@ -119,7 +137,9 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
     if (isComplete && windowEndTime) {
       return `Available until ${formatTimeForDisplay(windowEndTime)}`;
     } else if (!isComplete) {
-      return `Opens at ${formatTimeForDisplay(nextWindowTime)}`;
+      // Check if the next window is today or tomorrow
+      const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
+      return `Opens at ${formatTimeForDisplay(nextWindowTime)}${isToday ? '' : ' tomorrow'}`;
     }
     return '';
   };

@@ -368,11 +368,7 @@ const HomeScreen = () => {
           
           {timeWindowStatus.windowInfo && (
             <TimeWindowCountdown 
-              nextWindowTime={
-                Date.now() > timeWindowStatus.windowInfo.end 
-                  ? timeWindowStatus.windowInfo.start + 86400000 // Next day at the same time
-                  : timeWindowStatus.windowInfo.start
-              }
+              nextWindowTime={timeWindowStatus.windowInfo.start}
               windowEndTime={timeWindowStatus.windowInfo.end}
               onCountdownComplete={handleCountdownComplete}
             />
@@ -382,7 +378,8 @@ const HomeScreen = () => {
           {timeWindowStatus.windowInfo && Date.now() > timeWindowStatus.windowInfo.end && (
             <View style={styles.nextWindowInfo}>
               <Text style={styles.nextWindowText}>
-                Next window opens at {timeWindowStatus.windowInfo.formattedStart} tomorrow
+                Next window opens at {timeWindowStatus.windowInfo.formattedStart}
+                {new Date(timeWindowStatus.windowInfo.start).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
               </Text>
             </View>
           )}

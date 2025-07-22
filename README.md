@@ -102,7 +102,7 @@ npm start
   ```sh
   npx expo start
   ```
-  Scan the QR code with Expo Go app on your device
+  Scan the QR code with Expo Go app on your device (If you got "No useable data found" on your iPhone, press s in terminal, then try to scan again)
 
 ### 7. Deploy to Railway (optional)
 1. Create a Railway account
@@ -140,9 +140,6 @@ npm start
 5. Audio player loads and plays the generated sound effect
 
 ## Known Issues & Limitations
-
-### Current Issues
-- **QR Code Scanning**: May have issues when scanning Expo QR code with iPhone camera
 
 ### Technical Limitations
 - **API Dependencies**: Requires ElevenLabs API key
