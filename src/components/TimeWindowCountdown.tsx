@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
-import { getTimeUntilNextWindow, formatTimeForDisplay } from '../utils/timeWindow';
+import { formatTime } from '../utils/timeWindow';
 
 interface TimeWindowCountdownProps {
   nextWindowTime: number;
@@ -60,7 +60,10 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
         setIsComplete(true);
         setTimeRemaining({ hours: 0, minutes: 0 });
         
-        if (onCountdownComplete) {
+        // Only trigger the countdown completion callback once
+        // This prevents multiple triggers when the component re-renders
+        if (onCountdownComplete && !isComplete) {
+          console.log('TimeWindowCountdown: Countdown complete, triggering callback');
           onCountdownComplete();
         }
         
@@ -135,11 +138,11 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
   // Get the formatted time string
   const getFormattedTime = () => {
     if (isComplete && windowEndTime) {
-      return `Available until ${formatTimeForDisplay(windowEndTime)}`;
+      return `Available until ${formatTime(windowEndTime)}`;
     } else if (!isComplete) {
       // Check if the next window is today or tomorrow
       const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
-      return `Opens at ${formatTimeForDisplay(nextWindowTime)}${isToday ? '' : ' tomorrow'}`;
+      return `Opens at ${formatTime(nextWindowTime)}${isToday ? '' : ' tomorrow'}`;
     }
     return '';
   };

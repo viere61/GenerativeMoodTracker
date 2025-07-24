@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import AuthService, { RegistrationData, LoginData } from '../services/AuthService';
 import LocalStorageManager from '../services/LocalStorageManager';
-import NotificationService from '../services/NotificationService';
 import TimeWindowService from '../services/TimeWindowService';
 import * as SecureStore from 'expo-secure-store';
 import { generateUUID } from '../utils/uuid';
 
 // Mock dependencies
 vi.mock('../services/LocalStorageManager');
-vi.mock('../services/NotificationService');
 vi.mock('../services/TimeWindowService');
 vi.mock('expo-secure-store');
 vi.mock('../utils/uuid');
@@ -68,11 +66,6 @@ describe('Authentication Flow Integration', () => {
     // Mock LocalStorageManager methods
     vi.mocked(LocalStorageManager.initialize).mockResolvedValue();
     
-    // Mock NotificationService methods
-    vi.mocked(NotificationService.initialize).mockResolvedValue();
-    vi.mocked(NotificationService.requestPermissions).mockResolvedValue(true);
-    vi.mocked(NotificationService.scheduleTimeWindowNotification).mockResolvedValue(true);
-    
     // Mock TimeWindowService methods
     vi.mocked(TimeWindowService.initialize).mockResolvedValue();
     vi.mocked(TimeWindowService.getOrCreateDailyWindow).mockResolvedValue({
@@ -116,19 +109,13 @@ describe('Authentication Flow Integration', () => {
       
       // Step 2: Initialize services for the new user
       await LocalStorageManager.initialize();
-      await NotificationService.initialize();
       await TimeWindowService.initialize();
       
       // Verify services were initialized
       expect(LocalStorageManager.initialize).toHaveBeenCalled();
-      expect(NotificationService.initialize).toHaveBeenCalled();
       expect(TimeWindowService.initialize).toHaveBeenCalled();
       
-      // Step 3: Request notification permissions
-      const permissionsGranted = await NotificationService.requestPermissions();
-      expect(permissionsGranted).toBe(true);
-      
-      // Step 4: Generate first time window
+      // Step 3: Generate first time window
       const timeWindow = await TimeWindowService.getOrCreateDailyWindow(mockUserId);
       
       // Verify time window was created
@@ -136,11 +123,7 @@ describe('Authentication Flow Integration', () => {
       expect(timeWindow.userId).toBe(mockUserId);
       expect(timeWindow.hasLogged).toBe(false);
       
-      // Step 5: Schedule notification for time window
-      const notificationScheduled = await NotificationService.scheduleTimeWindowNotification(mockUserId);
-      expect(notificationScheduled).toBe(true);
-      
-      // Step 6: Verify authentication state
+      // Step 4: Verify authentication state
       const authState = await AuthService.getAuthState();
       
       // Verify user is authenticated
@@ -177,12 +160,10 @@ describe('Authentication Flow Integration', () => {
       
       // Step 2: Initialize services for the logged-in user
       await LocalStorageManager.initialize();
-      await NotificationService.initialize();
       await TimeWindowService.initialize();
       
       // Verify services were initialized
       expect(LocalStorageManager.initialize).toHaveBeenCalled();
-      expect(NotificationService.initialize).toHaveBeenCalled();
       expect(TimeWindowService.initialize).toHaveBeenCalled();
       
       // Step 3: Get or create daily time window
@@ -213,7 +194,6 @@ describe('Authentication Flow Integration', () => {
       
       // Verify services were not initialized
       expect(LocalStorageManager.initialize).not.toHaveBeenCalled();
-      expect(NotificationService.initialize).not.toHaveBeenCalled();
       expect(TimeWindowService.initialize).not.toHaveBeenCalled();
     });
   });

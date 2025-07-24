@@ -3,21 +3,19 @@ import { View, Text, StyleSheet, Button, ActivityIndicator, RefreshControl, Scro
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import TimeWindowValidator from '../utils/TimeWindowValidator';
+import { TimeWindowValidator } from '../utils/TimeWindowValidator';
 import TimeWindowService from '../services/TimeWindowService';
-import NotificationService from '../services/NotificationService';
+import PushNotificationService from '../services/PushNotificationService';
 import TimeWindowCountdown from '../components/TimeWindowCountdown';
-import { formatTimeForDisplay } from '../utils/timeWindow';
 import UserPreferencesService from '../services/UserPreferencesService';
-import MusicDebugPanel from '../components/MusicDebugPanel';
-import emailNotificationService from '../services/EmailNotificationService';
+// import MusicDebugPanel from '../components/MusicDebugPanel';
 import MoodEntryService from '../services/MoodEntryService';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
 const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -27,33 +25,31 @@ const HomeScreen = () => {
   const [timeWindowStatus, setTimeWindowStatus] = useState<{
     canLog: boolean;
     message: string;
-    windowInfo?: {
-      start: number;
-      end: number;
-      formattedStart: string;
-      formattedEnd: string;
-    };
+    windowStart?: number;
+    windowEnd?: number;
   }>({
     canLog: false,
     message: 'Set your preferred time range to get started',
   });
-  
+
+  const pushNotificationService = PushNotificationService.getInstance();
+
   // Initialize user preferences and check notification permissions on mount
   useEffect(() => {
     const initializeApp = async () => {
       try {
         setLoading(true);
-        
+
         // Check notification permissions
-        const permissionsGranted = await NotificationService.requestPermissions();
-        setNotificationsEnabled(permissionsGranted);
-        
+        const result = await pushNotificationService.initialize();
+        setNotificationsEnabled(result.success);
+
         // Always use demo user for now
         const demoUserId = 'demo-user';
-        
+
         // Try to load existing preferences
         let preferences = await UserPreferencesService.getPreferences(demoUserId);
-        
+
         if (!preferences) {
           // Initialize default preferences if none exist
           preferences = await UserPreferencesService.initializePreferences(demoUserId, {
@@ -63,14 +59,14 @@ const HomeScreen = () => {
             audioQuality: 'high'
           });
         }
-        
+
         // Set times from preferences
         setStartTime(preferences.preferredTimeRange.start);
         setEndTime(preferences.preferredTimeRange.end);
-        
+
         // Check time window status
         await checkTimeWindow();
-        
+
       } catch (error) {
         console.error('Error initializing app:', error);
         setTimeWindowStatus({
@@ -81,32 +77,55 @@ const HomeScreen = () => {
         setLoading(false);
       }
     };
-    
+
     initializeApp();
   }, []);
-  
+
   // Function to update time range preferences
   const updateTimeRange = async (newStartTime: string, newEndTime: string) => {
     try {
       setLoading(true);
       const userId = 'demo-user';
-      
+
       // Update preferences
       await UserPreferencesService.updatePreferredTimeRange(userId, {
         start: newStartTime,
         end: newEndTime
       });
-      
+
       // Update local state
       setStartTime(newStartTime);
       setEndTime(newEndTime);
+
+      // Cancel any existing notifications
+      await pushNotificationService.cancelAllMoodReminders();
       
       // Reset time window for today
-      await TimeWindowService.resetDailyWindow(userId);
-      
+      const newWindow = await TimeWindowService.resetWindow(userId);
+
+      // Schedule notification for the new window if it's in the future
+      const now = Date.now();
+      const timeUntilWindow = newWindow.windowStart - now;
+
+      console.log('Time until new window start:', {
+        now: new Date(now).toLocaleString(),
+        windowStart: new Date(newWindow.windowStart).toLocaleString(),
+        timeUntilWindow: timeUntilWindow / 1000 / 60 + ' minutes'
+      });
+
+      if (timeUntilWindow > 5 * 60 * 1000) { // 5 minutes in milliseconds
+        console.log('Scheduling notification for new window');
+        await pushNotificationService.scheduleWindowNotification(
+          newWindow.windowStart,
+          newWindow.windowEnd
+        );
+      } else {
+        console.log('New window is too soon, not scheduling notification');
+      }
+
       // Check new time window
       await checkTimeWindow();
-      
+
       setShowTimeRangeSelector(false);
     } catch (error) {
       console.error('Error updating time range:', error);
@@ -115,110 +134,97 @@ const HomeScreen = () => {
     }
   };
 
-  // Function to check the time window status
+  // Function to check the current time window status
   const checkTimeWindow = useCallback(async () => {
-    const userId = 'demo-user';
-    
     try {
-      setLoading(true);
+      const userId = 'demo-user';
+      const result = await TimeWindowService.canLogMood(userId);
       
-      // Validate if the user can log a mood
-      const validationResult = await TimeWindowValidator.validateMoodLogging(userId);
-      
-      setTimeWindowStatus(validationResult);
-      
-      // Schedule notification if not already sent
-      if (notificationsEnabled) {
-        await NotificationService.scheduleTimeWindowNotification(userId);
-        
-        // If the window has passed for today, schedule a notification for tomorrow
-        if (validationResult.windowInfo && Date.now() > validationResult.windowInfo.end) {
-          await NotificationService.scheduleNextDayNotification(userId);
-        }
-      }
+      setTimeWindowStatus({
+        canLog: result.canLog,
+        message: result.message,
+        windowStart: result.window.windowStart,
+        windowEnd: result.window.windowEnd,
+      });
     } catch (error) {
       console.error('Error checking time window:', error);
       setTimeWindowStatus({
         canLog: false,
-        message: 'Unable to check your time window. Please try again.',
+        message: 'Error checking time window. Please try again.',
       });
-    } finally {
-      setLoading(false);
     }
-  }, [notificationsEnabled]);
-  
+  }, []);
+
   // Check time window when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      // Just check the time window status without sending any notifications
       checkTimeWindow();
-      
-      // Check for automatic email reminders
-      const checkEmailReminders = async () => {
-        try {
-          console.log('🏠 HomeScreen: Starting email reminder check...');
-          
-          // Get email settings
-          const emailSettings = await UserPreferencesService.getEmailNotificationSettings('demo-user');
-          console.log('🏠 HomeScreen: Email settings:', emailSettings);
-          
-          if (emailSettings?.enabled && emailSettings?.autoRemindersEnabled) {
-            console.log('🏠 HomeScreen: Email notifications enabled and auto-reminders enabled');
-            
-            // Get mood entries to check if user has logged today
-            const moodEntries = await MoodEntryService.getMoodEntries('demo-user');
-            console.log('🏠 HomeScreen: Mood entries count:', moodEntries?.length || 0);
-            
-            // Check and send automatic reminder
-            console.log('🏠 HomeScreen: Calling checkAndSendAutoReminder...');
-            const result = await emailNotificationService.checkAndSendAutoReminder(
-              emailSettings.userEmail,
-              emailSettings.userName || 'User',
-              moodEntries
-            );
-            console.log('🏠 HomeScreen: Auto-reminder result:', result);
-          } else {
-            console.log('🏠 HomeScreen: Email notifications or auto-reminders disabled');
-            console.log('🏠 HomeScreen: enabled:', emailSettings?.enabled);
-            console.log('🏠 HomeScreen: autoRemindersEnabled:', emailSettings?.autoRemindersEnabled);
-          }
-        } catch (error) {
-          console.error('🏠 HomeScreen: Error checking email reminders:', error);
-        }
-      };
-      
-      checkEmailReminders();
     }, [checkTimeWindow])
   );
-  
+
   // Handle refresh
   const handleRefresh = async () => {
     setRefreshing(true);
     await checkTimeWindow();
     setRefreshing(false);
   };
-  
+
   // Handle countdown completion
-  const handleCountdownComplete = () => {
-    checkTimeWindow();
+  const handleCountdownComplete = async () => {
+    // Just check the time window status without sending any notifications
+    await checkTimeWindow();
+
+    // No fallback notification - we only want the scheduled notification at window start
   };
-  
+
   // Request notification permissions
   const handleEnableNotifications = async () => {
-    const permissionsGranted = await NotificationService.requestPermissions();
-    setNotificationsEnabled(permissionsGranted);
-    
-    if (permissionsGranted) {
+    const result = await pushNotificationService.initialize();
+    setNotificationsEnabled(result.success);
+
+    if (result.success) {
       await checkTimeWindow();
     }
   };
-  
+
   // Reset time window for testing (would be in settings in real app)
   const handleResetTimeWindow = async () => {
     const userId = 'demo-user';
-    
+
     try {
       setLoading(true);
-      await TimeWindowService.resetDailyWindow(userId);
+      // Cancel any existing notifications
+      await pushNotificationService.cancelAllMoodReminders();
+      // Reset the time window
+      const newWindow = await TimeWindowService.resetWindow(userId);
+
+      // Only schedule a notification if the window is at least 5 minutes in the future
+      // This prevents immediate notifications when resetting the window
+      const now = Date.now();
+      const windowStart = newWindow.windowStart;
+      const timeUntilWindow = windowStart - now;
+
+      console.log('Time until window start:', {
+        now: new Date(now).toLocaleString(),
+        windowStart: new Date(windowStart).toLocaleString(),
+        timeUntilWindow: timeUntilWindow / 1000 / 60 + ' minutes'
+      });
+
+      // Always try to schedule notification if window is in the future
+      // The PushNotificationService will handle the validation
+      console.log('🏠 [handleResetTimeWindow] Attempting to schedule notification...');
+      const scheduleResult = await pushNotificationService.scheduleWindowNotification(
+        newWindow.windowStart,
+        newWindow.windowEnd
+      );
+      
+      if (scheduleResult.success) {
+        console.log('🏠 [handleResetTimeWindow] ✅ Notification scheduled successfully');
+      } else {
+        console.log('🏠 [handleResetTimeWindow] ❌ Failed to schedule notification:', scheduleResult.error);
+      }
+
       await checkTimeWindow();
     } catch (error) {
       console.error('Error resetting time window:', error);
@@ -226,12 +232,26 @@ const HomeScreen = () => {
       setLoading(false);
     }
   };
-  
+
   // Send a test notification
   const handleTestNotification = async () => {
-    await NotificationService.sendTestNotification();
+    // Send a test notification
+    await pushNotificationService.sendTestNotification(
+      'Test Notification',
+      'This is a test notification to verify push notifications are working.'
+    );
   };
-  
+
+  // Send a test scheduled notification (for debugging)
+  const handleTestScheduledNotification = async () => {
+    const result = await pushNotificationService.sendTestScheduledNotification();
+    if (result.success) {
+      alert('Test scheduled notification created! It should appear in 2 minutes.');
+    } else {
+      alert('Failed to create test notification: ' + result.error);
+    }
+  };
+
   return (
     <ScrollView
       contentContainerStyle={styles.container}
@@ -240,12 +260,12 @@ const HomeScreen = () => {
       }
     >
       <Text style={styles.title}>Generative Mood Tracker</Text>
-      
+
       {/* Current Time Range Display */}
       <View style={styles.timeRangeDisplay}>
         <Text style={styles.timeRangeLabel}>Current Time Range:</Text>
         <Text style={styles.timeRangeText}>{startTime} - {endTime}</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.editTimeButton}
           onPress={() => setShowTimeRangeSelector(!showTimeRangeSelector)}
         >
@@ -254,7 +274,7 @@ const HomeScreen = () => {
           </Text>
         </TouchableOpacity>
       </View>
-      
+
       {/* Time Range Selector */}
       {showTimeRangeSelector && (
         <View style={styles.timeRangeSelector}>
@@ -262,7 +282,7 @@ const HomeScreen = () => {
           <Text style={styles.selectorDescription}>
             Choose when you're typically available. We'll randomly select a 1-hour window within this range each day.
           </Text>
-          
+
           <View style={styles.timePickerRow}>
             <Text style={styles.timeLabel}>Start Time:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScrollView}>
@@ -291,7 +311,7 @@ const HomeScreen = () => {
               </View>
             </ScrollView>
           </View>
-          
+
           <View style={styles.timePickerRow}>
             <Text style={styles.timeLabel}>End Time:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScrollView}>
@@ -320,11 +340,11 @@ const HomeScreen = () => {
               </View>
             </ScrollView>
           </View>
-          
+
           <Text style={styles.selectedRange}>
             Your window will be between {startTime} and {endTime}
           </Text>
-          
+
           <TouchableOpacity
             style={styles.saveButton}
             onPress={() => updateTimeRange(startTime, endTime)}
@@ -333,9 +353,9 @@ const HomeScreen = () => {
           </TouchableOpacity>
         </View>
       )}
-      
+
       {!notificationsEnabled && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.notificationBanner}
           onPress={handleEnableNotifications}
         >
@@ -344,7 +364,7 @@ const HomeScreen = () => {
           </Text>
         </TouchableOpacity>
       )}
-      
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0000ff" />
@@ -353,11 +373,11 @@ const HomeScreen = () => {
       ) : timeWindowStatus.canLog ? (
         <View style={styles.windowOpen}>
           <Text style={styles.windowText}>Your mood logging window is open!</Text>
-          <Text style={styles.windowTimeText}>
-            Available until {timeWindowStatus.windowInfo?.formattedEnd}
-          </Text>
-          <Button 
-            title="Log Your Mood" 
+                      <Text style={styles.windowTimeText}>
+              Available until {timeWindowStatus.windowEnd ? new Date(timeWindowStatus.windowEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+            </Text>
+          <Button
+            title="Log Your Mood"
             onPress={() => navigation.navigate('MoodEntry')}
           />
         </View>
@@ -365,46 +385,52 @@ const HomeScreen = () => {
         <View style={styles.windowClosed}>
           <Text style={styles.windowText}>Your mood logging window is closed</Text>
           <Text style={styles.messageText}>{timeWindowStatus.message}</Text>
-          
-          {timeWindowStatus.windowInfo && (
-            <TimeWindowCountdown 
-              nextWindowTime={timeWindowStatus.windowInfo.start}
-              windowEndTime={timeWindowStatus.windowInfo.end}
+
+          {timeWindowStatus.windowStart && timeWindowStatus.windowEnd && (
+            <TimeWindowCountdown
+              nextWindowTime={timeWindowStatus.windowStart}
+              windowEndTime={timeWindowStatus.windowEnd}
               onCountdownComplete={handleCountdownComplete}
             />
           )}
-          
-          {/* Show next window info when current window has passed */}
-          {timeWindowStatus.windowInfo && Date.now() > timeWindowStatus.windowInfo.end && (
-            <View style={styles.nextWindowInfo}>
-              <Text style={styles.nextWindowText}>
-                Next window opens at {timeWindowStatus.windowInfo.formattedStart}
-                {new Date(timeWindowStatus.windowInfo.start).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
-              </Text>
-            </View>
-          )}
+
+                      {/* Show next window info when current window has passed */}
+            {timeWindowStatus.windowStart && timeWindowStatus.windowEnd && Date.now() > timeWindowStatus.windowEnd && (
+              <View style={styles.nextWindowInfo}>
+                <Text style={styles.nextWindowText}>
+                  Next window opens at {new Date(timeWindowStatus.windowStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {new Date(timeWindowStatus.windowStart).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
+                </Text>
+              </View>
+            )}
         </View>
       )}
-      
+
       {/* This button would be in settings in the real app */}
       <View style={styles.devControls}>
         <Text style={styles.devTitle}>Developer Controls</Text>
         <View style={styles.buttonRow}>
-          <Button 
-            title="Reset Time Window" 
+          <Button
+            title="Reset Time Window"
             onPress={handleResetTimeWindow}
           />
         </View>
         <View style={styles.buttonRow}>
-          <Button 
-            title="Test Notification" 
+          <Button
+            title="Test Notification"
             onPress={handleTestNotification}
+          />
+        </View>
+        <View style={styles.buttonRow}>
+          <Button
+            title="🧪 Test Scheduled Notification (2 min)"
+            onPress={handleTestScheduledNotification}
           />
         </View>
       </View>
 
-      {/* Music Generation Debug Panel */}
-      <MusicDebugPanel userId="demo-user" />
+      {/* Music Generation Debug Panel removed to prevent automatic tests */}
+      {/* <MusicDebugPanel userId="demo-user" /> */}
     </ScrollView>
   );
 };

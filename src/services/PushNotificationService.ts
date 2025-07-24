@@ -4,23 +4,85 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import LocalStorageManager from './LocalStorageManager';
 
-// Configure notification behavior
+// Fixed notification handler - should work like the test notification now
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const notificationData = notification.request.content.data as any;
+    const notificationType = notificationData?.type;
+    
+    console.log('🔔 [NotificationHandler] Processing notification:', {
+      type: notificationType,
+      currentTime: new Date().toLocaleString(),
+      title: notification.request.content.title
+    });
+
+    // Allow test notifications
+    if (notificationType === 'test_scheduled' || notificationType === 'test') {
+      console.log('🔔 [NotificationHandler] ✅ Test notification - allowing through');
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    }
+
+    // For mood reminders, check if window is open
+    if (notificationType === 'mood_reminder') {
+      const windowStart = notificationData?.windowStart;
+      const windowEnd = notificationData?.windowEnd;
+      const now = Date.now();
+      
+      console.log('🔔 [NotificationHandler] Mood reminder timing check:', {
+        windowStart: windowStart ? new Date(windowStart).toLocaleString() : 'unknown',
+        windowEnd: windowEnd ? new Date(windowEnd).toLocaleString() : 'unknown',
+        currentTime: new Date(now).toLocaleString(),
+        isWithinWindow: windowStart && windowEnd && now >= windowStart && now <= windowEnd
+      });
+
+      // Only show if the current time is within the logging window
+      if (windowStart && windowEnd && now >= windowStart && now <= windowEnd) {
+        console.log('🔔 [NotificationHandler] ✅ Window is open - showing mood reminder');
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        };
+      } else {
+        console.log('🔔 [NotificationHandler] ❌ Window not open - blocking mood reminder');
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+    }
+    
+    // Allow all other notification types
+    console.log('🔔 [NotificationHandler] ✅ Allowing other notification type');
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 export interface PushNotificationSettings {
   enabled: boolean;
   reminderEnabled: boolean;
-  preferredTimeRange?: { start: string; end: string };
 }
 
+/**
+ * Simple push notification service that only sends notifications at window start time
+ */
 export class PushNotificationService {
   private static instance: PushNotificationService;
   private expoPushToken: string | null = null;
@@ -69,9 +131,6 @@ export class PushNotificationService {
         return { success: false, error: 'Failed to get push token' };
       }
 
-      // Check if smart reminders are enabled and schedule them
-      await this.checkAndScheduleSmartReminders();
-
       console.log('✅ Push notifications initialized successfully');
       return { success: true, token };
     } catch (error) {
@@ -81,30 +140,13 @@ export class PushNotificationService {
   }
 
   /**
-   * Check if smart reminders are enabled and schedule them
-   */
-  private async checkAndScheduleSmartReminders(): Promise<void> {
-    try {
-      const settings = await LocalStorageManager.retrieveData<PushNotificationSettings>('pushNotificationSettings');
-      
-      if (settings && settings.enabled && settings.reminderEnabled) {
-        console.log('🔔 Smart reminders enabled, scheduling...');
-        await this.scheduleSmartMoodReminder();
-      }
-    } catch (error) {
-      console.error('❌ Error checking smart reminders:', error);
-    }
-  }
-
-  /**
    * Get push token for the device
    */
   private async getPushToken(): Promise<string | null> {
     try {
-      // Get the project ID from app.json or constants
       const projectId = (Constants.expoConfig as any)?.extra?.eas?.projectId || 
                        (Constants.expoConfig as any)?.projectId ||
-                       'your-project-id'; // You'll need to set this
+                       'your-project-id';
 
       console.log('🔔 Getting push token for project:', projectId);
 
@@ -122,132 +164,81 @@ export class PushNotificationService {
   }
 
   /**
-   * Schedule a smart mood reminder based on time window
+   * Schedule a notification for when the logging window starts
    */
-  async scheduleSmartMoodReminder(
+  async scheduleWindowNotification(
+    windowStartTime: number,
+    windowEndTime: number,
     title: string = "Time to Log Your Mood!",
-    body: string = "Your mood logging window is now open. Take a moment to reflect on your day."
+    body?: string
   ): Promise<{ success: boolean; notificationId?: string; error?: string }> {
     try {
-      console.log('🔔 Scheduling smart mood reminder based on time window');
-
-      // Cancel any existing mood reminders
-      await this.cancelMoodReminders();
-
-      // Get the current time window from TimeWindowService
-      const TimeWindowService = require('./TimeWindowService').default;
-      const MoodEntryService = require('./MoodEntryService').default;
-      const userId = 'demo-user'; // You might want to make this configurable
+      const now = Date.now();
+      const windowStart = new Date(windowStartTime);
+      const windowEnd = new Date(windowEndTime);
+      const minutesUntilWindow = (windowStartTime - now) / (1000 * 60);
       
-      const currentWindow = await TimeWindowService.getOrCreateDailyWindow(userId);
-      if (!currentWindow) {
-        console.log('🔔 No time window available, cannot schedule reminder');
-        return { success: false, error: 'No time window available' };
+      console.log('🔔 [scheduleWindowNotification] === SCHEDULING WINDOW NOTIFICATION ===');
+      console.log('🔔 [scheduleWindowNotification] Current time:', new Date(now).toLocaleString());
+      console.log('🔔 [scheduleWindowNotification] Window start:', windowStart.toLocaleString());
+      console.log('🔔 [scheduleWindowNotification] Window end:', windowEnd.toLocaleString());
+      console.log('🔔 [scheduleWindowNotification] Minutes until window:', minutesUntilWindow);
+
+      // Only schedule if the window is in the future (at least 1 minute away)
+      if (windowStartTime <= now + 60000) { // 1 minute buffer
+        console.log('🔔 [scheduleWindowNotification] ❌ Window start time is too soon or in the past');
+        console.log('🔔 [scheduleWindowNotification] ❌ Not scheduling notification');
+        return { success: false, error: 'Window start time is not far enough in the future' };
       }
 
-      // Check if user has already logged mood today using the same method as email service
-      const moodEntries = await MoodEntryService.getMoodEntries(userId);
-      const today = new Date().toDateString();
-      const hasLoggedToday = moodEntries.some((entry: any) => 
-        new Date(entry.timestamp).toDateString() === today
-      );
+      // Cancel any existing mood reminder notifications FIRST
+      console.log('🔔 [scheduleWindowNotification] Cancelling existing notifications...');
+      await this.cancelAllMoodReminders();
 
-      if (hasLoggedToday) {
-        console.log('🔔 User has already logged mood today, no reminder needed');
-        return { success: false, error: 'Already logged today' };
+      // Double-check we cancelled everything
+      const remainingNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      const remainingMoodReminders = remainingNotifications.filter(n => n.content.data?.type === 'mood_reminder');
+      if (remainingMoodReminders.length > 0) {
+        console.log('🔔 [scheduleWindowNotification] ⚠️ Warning: Still have remaining mood reminders:', remainingMoodReminders.length);
       }
 
-      // Calculate when the window starts and ends
-      const now = new Date();
-      let windowStart = new Date(currentWindow.windowStart);
-      let windowEnd = new Date(currentWindow.windowEnd);
-      
-      console.log('🔔 Time window debug:', {
-        now: now.toISOString(),
-        windowStart: windowStart.toISOString(),
-        windowEnd: windowEnd.toISOString(),
-        hasLoggedToday,
-        isWindowOpen: now >= windowStart && now <= windowEnd
-      });
-      
-      // Check if the window is currently open
-      const isWindowOpen = now >= windowStart && now <= windowEnd;
+      // Create the notification body
+      const notificationBody = body || 
+        `Your mood logging window is now open. You can log your mood until ${windowEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
 
-      if (isWindowOpen) {
-        // If the window is currently open, send immediate notification
-        console.log('🔔 Time window is currently open, sending immediate reminder');
-        return await this.sendImmediateNotification(title, body, { 
-          type: 'mood_reminder', 
-          date: currentWindow.date 
-        });
-      } else if (windowStart > now) {
-        // If the window is in the future, schedule for today
-        const notificationId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title,
-            body,
-            data: { type: 'mood_reminder', date: currentWindow.date },
-          },
-          trigger: {
-            date: windowStart,
-          } as any,
-        });
-        console.log('✅ Smart mood reminder scheduled for window start:', windowStart);
-        return { success: true, notificationId };
-      } else {
-        // Window has already passed, schedule for tomorrow's window
-        windowStart.setDate(windowStart.getDate() + 1);
-        const notificationId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title,
-            body,
-            data: { type: 'mood_reminder', date: currentWindow.date },
-          },
-          trigger: {
-            date: windowStart,
-          } as any,
-        });
-        console.log('✅ Smart mood reminder scheduled for tomorrow window start:', windowStart);
-        return { success: true, notificationId };
-      }
-    } catch (error) {
-      console.error('❌ Error scheduling smart mood reminder:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  }
+      console.log('🔔 [scheduleWindowNotification] Scheduling notification with Expo...');
+      console.log('🔔 [scheduleWindowNotification] Title:', title);
+      console.log('🔔 [scheduleWindowNotification] Body:', notificationBody);
+      console.log('🔔 [scheduleWindowNotification] Trigger date:', windowStart.toISOString());
+      console.log('🔔 [scheduleWindowNotification] NOTE: In Expo Go, notifications may fire immediately for testing');
 
-  /**
-   * Schedule a local notification for mood reminder (legacy method)
-   */
-  async scheduleMoodReminder(
-    hour: number,
-    minute: number,
-    title: string = "Time to Log Your Mood!",
-    body: string = "Take a moment to reflect on your day and log your mood."
-  ): Promise<{ success: boolean; notificationId?: string; error?: string }> {
-    try {
-      console.log(`🔔 Scheduling mood reminder for ${hour}:${minute}`);
-
-      // Cancel any existing mood reminders
-      await this.cancelMoodReminders();
-
+      // Schedule the notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title,
-          body,
-          data: { type: 'mood_reminder' },
+          body: notificationBody,
+          data: { 
+            type: 'mood_reminder',
+            windowStart: windowStartTime,
+            windowEnd: windowEndTime,
+            scheduledAt: now // Track when this was scheduled
+          },
         },
         trigger: {
-          hour,
-          minute,
-          repeats: true, // Repeat daily
+          type: 'date',
+          date: windowStart,
         } as any,
       });
 
-      console.log('✅ Mood reminder scheduled:', notificationId);
+      console.log('🔔 [scheduleWindowNotification] ✅ Notification scheduled successfully!');
+      console.log('🔔 [scheduleWindowNotification] ✅ Notification ID:', notificationId);
+      console.log('🔔 [scheduleWindowNotification] ✅ Will fire at:', windowStart.toLocaleString());
+      console.log('🔔 [scheduleWindowNotification] ✅ Minutes from now:', minutesUntilWindow);
+      console.log('🔔 [scheduleWindowNotification] === END SCHEDULING ===');
+
       return { success: true, notificationId };
     } catch (error) {
-      console.error('❌ Error scheduling mood reminder:', error);
+      console.error('❌ [scheduleWindowNotification] Error scheduling window notification:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
@@ -255,46 +246,93 @@ export class PushNotificationService {
   /**
    * Cancel all mood reminder notifications
    */
-  async cancelMoodReminders(): Promise<void> {
+  async cancelAllMoodReminders(): Promise<void> {
     try {
       const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      
+      console.log('🔔 [cancelAllMoodReminders] Total scheduled notifications:', scheduledNotifications.length);
+      
       const moodReminders = scheduledNotifications.filter(
         notification => notification.content.data?.type === 'mood_reminder'
       );
 
+      console.log('🔔 [cancelAllMoodReminders] Mood reminder notifications to cancel:', moodReminders.length);
+
       for (const notification of moodReminders) {
+        const triggerInfo = notification.trigger ? 
+          (notification.trigger as any).date ? 
+            `scheduled for ${new Date((notification.trigger as any).date).toLocaleString()}` : 
+            'immediate trigger' :
+          'no trigger';
+        
+        console.log(`🔔 [cancelAllMoodReminders] Cancelling: ${notification.identifier} (${triggerInfo})`);
         await Notifications.cancelScheduledNotificationAsync(notification.identifier);
-        console.log('🔔 Cancelled mood reminder:', notification.identifier);
       }
+
+      console.log(`🔔 [cancelAllMoodReminders] Successfully cancelled ${moodReminders.length} mood reminder notifications`);
     } catch (error) {
-      console.error('❌ Error cancelling mood reminders:', error);
+      console.error('❌ [cancelAllMoodReminders] Error cancelling mood reminders:', error);
     }
   }
 
   /**
-   * Send immediate notification (for testing)
+   * Send immediate test notification
    */
-  async sendImmediateNotification(
-    title: string,
-    body: string,
-    data?: any
+  async sendTestNotification(
+    title: string = "Test Notification",
+    body: string = "This is a test notification from the mood tracker."
   ): Promise<{ success: boolean; notificationId?: string; error?: string }> {
     try {
-      console.log('🔔 Sending immediate notification:', title);
+      console.log('🔔 Sending test notification:', title);
 
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title,
           body,
-          data: data || {},
+          data: { type: 'test' },
         },
         trigger: null, // Send immediately
       });
 
-      console.log('✅ Immediate notification sent:', notificationId);
+      console.log('✅ Test notification sent:', notificationId);
       return { success: true, notificationId };
     } catch (error) {
-      console.error('❌ Error sending immediate notification:', error);
+      console.error('❌ Error sending test notification:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Test scheduled notification with simple 2-minute delay
+   */
+  async sendTestScheduledNotification(): Promise<{ success: boolean; notificationId?: string; error?: string }> {
+    try {
+      const now = new Date();
+      const testTime = new Date(now.getTime() + 2 * 60 * 1000); // 2 minutes from now
+      
+      console.log('🧪 [TEST] Scheduling simple test notification...');
+      console.log('🧪 [TEST] Current time:', now.toLocaleString());
+      console.log('🧪 [TEST] Will fire at:', testTime.toLocaleString());
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "🧪 Test Scheduled Notification",
+          body: `This should appear at ${testTime.toLocaleTimeString()}`,
+          data: { 
+            type: 'test_scheduled',
+            scheduledFor: testTime.getTime()
+          },
+        },
+        trigger: {
+          type: 'date',
+          date: testTime,
+        } as any,
+      });
+
+      console.log('🧪 [TEST] ✅ Simple scheduled notification created:', notificationId);
+      return { success: true, notificationId };
+    } catch (error) {
+      console.error('🧪 [TEST] ❌ Error scheduling test notification:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
@@ -307,29 +345,83 @@ export class PushNotificationService {
   }
 
   /**
-   * Get all scheduled notifications
+   * Get all scheduled notifications with detailed logging
    */
   async getScheduledNotifications(): Promise<Notifications.NotificationRequest[]> {
-    return await Notifications.getAllScheduledNotificationsAsync();
+    const notifications = await Notifications.getAllScheduledNotificationsAsync();
+    
+    console.log('🔔 [getScheduledNotifications] Currently scheduled notifications:', notifications.length);
+    notifications.forEach((notification, index) => {
+      const data = notification.content.data as any;
+      const trigger = notification.trigger as any;
+      console.log(`🔔 [getScheduledNotifications] ${index + 1}:`, {
+        id: notification.identifier,
+        title: notification.content.title,
+        type: data?.type,
+        scheduledFor: trigger?.date ? new Date(trigger.date).toLocaleString() : 'immediate',
+        windowStart: data?.windowStart ? new Date(data.windowStart).toLocaleString() : 'N/A',
+        windowEnd: data?.windowEnd ? new Date(data.windowEnd).toLocaleString() : 'N/A'
+      });
+    });
+    
+    return notifications;
   }
+
+  /**
+   * Handle mood reminder notifications - no longer needed since scheduling works correctly
+   */
+  private async handleEarlyMoodReminder(notification: any) {
+    const notificationData = notification.request.content.data;
+    const windowStart = notificationData?.windowStart;
+    const windowEnd = notificationData?.windowEnd;
+    const now = Date.now();
+    
+    console.log('🔔 [handleEarlyMoodReminder] Mood reminder received:', {
+      windowStart: windowStart ? new Date(windowStart).toLocaleString() : 'unknown',
+      windowEnd: windowEnd ? new Date(windowEnd).toLocaleString() : 'unknown',
+      currentTime: new Date(now).toLocaleString(),
+      isWithinWindow: windowStart && windowEnd && now >= windowStart && now <= windowEnd
+    });
+
+    // Since scheduling now works correctly, we don't need to reschedule
+    // The notification handler will determine if it should be shown
+  }
+
+
 
   /**
    * Set up notification listeners
    */
   setupNotificationListeners(): (() => void) {
     // Handle notification received while app is running
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log('🔔 Notification received:', notification);
+    const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
+      console.log('🔔 [NotificationListener] Notification received:', {
+        title: notification.request.content.title,
+        body: notification.request.content.body,
+        data: notification.request.content.data
+      });
+
+      const notificationData = notification.request.content.data;
+      const notificationType = notificationData?.type;
+
+      // Handle mood reminder notifications that fire early in Expo Go
+      if (notificationType === 'mood_reminder') {
+        this.handleEarlyMoodReminder(notification);
+      }
     });
 
     // Handle notification response (when user taps notification)
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('🔔 Notification response:', response);
-      // You can navigate to specific screens here based on notification type
+      console.log('🔔 [NotificationResponse] Notification tapped:', {
+        title: response.notification.request.content.title,
+        data: response.notification.request.content.data
+      });
+      
+      // Navigate to mood entry if it's a mood reminder
       const notificationType = response.notification.request.content.data?.type;
-      if (notificationType === 'mood_reminder') {
-        // Navigate to mood entry screen
-        console.log('🔔 User tapped mood reminder, should navigate to mood entry');
+      if (notificationType === 'mood_reminder' || notificationType === 'window_open') {
+        console.log('🔔 [NotificationResponse] User tapped mood reminder, should navigate to mood entry');
+        // Navigation logic would go here
       }
     });
 

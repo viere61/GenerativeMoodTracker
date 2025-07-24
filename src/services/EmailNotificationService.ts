@@ -328,14 +328,14 @@ class EmailNotificationService {
       const settings = await LocalStorageManager.retrieveData<EmailNotificationSettings>('emailNotificationSettings');
       
       if (settings) {
-        console.log('📧 EmailNotificationService: Found settings in LocalStorageManager:', settings);
+
         
         // Get time preferences from UserPreferencesService
         try {
           const userPreferences = await UserPreferencesService.getPreferences('demo-user');
           if (userPreferences && settings) {
             settings.preferredTimeRange = userPreferences.preferredTimeRange;
-            console.log('📧 EmailNotificationService: Added time preferences:', settings.preferredTimeRange);
+    
           }
         } catch (error) {
           console.warn('⚠️ Could not get user preferences for time range:', error);
@@ -344,7 +344,7 @@ class EmailNotificationService {
         return settings;
       }
       
-      console.log('📧 EmailNotificationService: No settings found in LocalStorageManager');
+      
       return null;
     } catch (error) {
       console.error('❌ Error reading stored settings:', error);

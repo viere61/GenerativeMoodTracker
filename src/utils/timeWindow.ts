@@ -1,170 +1,129 @@
 /**
- * Utility functions for managing the daily time window
+ * Clean utility functions for managing daily time windows
  */
 
 /**
- * Generates a random time window within the user's preferred range
- * @param startHour The start hour of the preferred range (0-23)
- * @param endHour The end hour of the preferred range (0-23)
- * @param targetDate Optional date to use (defaults to today)
- * @returns Object containing the start and end times of the window
+ * Generates a random 1-hour logging window within the user's preferred time range
+ * @param preferredStart Start time in "HH:MM" format (e.g., "09:00")
+ * @param preferredEnd End time in "HH:MM" format (e.g., "21:00")
+ * @returns Object containing window start and end timestamps, and the date
  */
-export const generateTimeWindow = (startHour: number, endHour: number, targetDate?: Date) => {
-  // Use provided date or today
-  const baseDate = targetDate ? new Date(targetDate) : new Date();
+export const generateRandomWindow = (preferredStart: string, preferredEnd: string) => {
+  // Parse the preferred time range
+  const [startHour, startMinute] = preferredStart.split(':').map(Number);
+  const [endHour, endMinute] = preferredEnd.split(':').map(Number);
   
-  // Log the input date for debugging
-  console.log('generateTimeWindow input:', {
-    targetDate: targetDate ? targetDate.toString() : 'none provided',
-    baseDate: baseDate.toString(),
-    baseDateISO: baseDate.toISOString()
-  });
+  // Convert to minutes for easier calculation
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
   
-  // Reset time to midnight for consistent calculations
-  baseDate.setHours(0, 0, 0, 0);
+  // Calculate available range (subtract 60 minutes for the 1-hour window)
+  const availableRange = endMinutes - startMinutes - 60;
   
-  // Log after setting to midnight
-  console.log('baseDate after setting to midnight:', {
-    baseDate: baseDate.toString(),
-    baseDateISO: baseDate.toISOString(),
-    hours: baseDate.getHours()
-  });
-  
-  // Ensure valid hour range
-  const validStartHour = Math.max(0, Math.min(23, startHour));
-  const validEndHour = Math.max(0, Math.min(23, endHour));
-  
-  // Calculate the range in hours
-  const rangeHours = validEndHour > validStartHour 
-    ? validEndHour - validStartHour 
-    : (24 - validStartHour) + validEndHour;
-  
-  // If range is less than 1 hour, return the start hour
-  if (rangeHours <= 1) {
-    const start = new Date(baseDate);
-    start.setHours(validStartHour, 0, 0, 0);
-    
-    const end = new Date(baseDate);
-    end.setHours(validStartHour + 1, 0, 0, 0);
-    
-    return {
-      startTime: start.getTime(),
-      endTime: end.getTime(),
-    };
+  if (availableRange <= 0) {
+    throw new Error('Time range too small for 1-hour window');
   }
   
-  // Generate a random hour within the range
-  const randomHoursOffset = Math.floor(Math.random() * (rangeHours - 1));
-  const windowStartHour = (validStartHour + randomHoursOffset) % 24;
+  // Generate random offset within available range
+  const randomOffset = Math.floor(Math.random() * availableRange);
+  const windowStartMinutes = startMinutes + randomOffset;
   
-  // Create Date objects for the start and end times
-  const start = new Date(baseDate);
-  start.setHours(windowStartHour, 0, 0, 0);
+  // Convert back to hours and minutes
+  const windowStartHour = Math.floor(windowStartMinutes / 60);
+  const windowStartMinute = windowStartMinutes % 60;
   
-  const end = new Date(baseDate);
-  end.setHours(windowStartHour + 1, 0, 0, 0);
+  // Determine if we should use today or tomorrow
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTotalMinutes = currentHour * 60 + currentMinute;
   
-  // Log the created window for debugging
-  console.log('Generated time window:', {
-    windowStartHour,
-    start: start.toString(),
-    startISO: start.toISOString(),
-    end: end.toString(),
-    endISO: end.toISOString(),
-    startHours: start.getHours(),
-    endHours: end.getHours()
+  // If the random window time has already passed today, use tomorrow
+  const useToday = windowStartMinutes > currentTotalMinutes;
+  
+  // Create the window start date
+  const windowDate = new Date();
+  if (!useToday) {
+    windowDate.setDate(windowDate.getDate() + 1);
+  }
+  windowDate.setHours(windowStartHour, windowStartMinute, 0, 0);
+  
+  // Create window end date (1 hour later)
+  const windowEndDate = new Date(windowDate);
+  windowEndDate.setHours(windowEndDate.getHours() + 1);
+  
+  const dateString = windowDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+  
+  console.log('Generated random window:', {
+    preferredRange: `${preferredStart} - ${preferredEnd}`,
+    currentTime: now.toLocaleTimeString(),
+    windowStart: windowDate.toLocaleString(),
+    windowEnd: windowEndDate.toLocaleString(),
+    useToday,
+    dateString
   });
   
-  return { 
-    startTime: start.getTime(), 
-    endTime: end.getTime() 
+  return {
+    windowStart: windowDate.getTime(),
+    windowEnd: windowEndDate.getTime(),
+    date: dateString
   };
 };
 
 /**
- * Checks if the current time is within the designated window
- * @param startTime The start time of the window
- * @param endTime The end time of the window
+ * Checks if the current time is within the logging window
+ * @param windowStart Window start timestamp
+ * @param windowEnd Window end timestamp
  * @returns Boolean indicating if current time is within the window
  */
-export const isWithinTimeWindow = (startTime: number, endTime: number) => {
-  const currentTime = Date.now();
-  
-  // Debug time comparison
-  console.log('isWithinTimeWindow check:', {
-    currentTime: new Date(currentTime).toLocaleString(),
-    startTime: new Date(startTime).toLocaleString(),
-    endTime: new Date(endTime).toLocaleString(),
-    isAfterStart: currentTime >= startTime,
-    isBeforeEnd: currentTime <= endTime,
-    isWithin: currentTime >= startTime && currentTime <= endTime
-  });
-  
-  return currentTime >= startTime && currentTime <= endTime;
+export const isWithinWindow = (windowStart: number, windowEnd: number): boolean => {
+  const now = Date.now();
+  return now >= windowStart && now <= windowEnd;
 };
 
 /**
- * Calculates the time remaining until the next window
- * @param nextWindowStartTime The start time of the next window
- * @returns Object containing hours and minutes until the next window
- */
-export const getTimeUntilNextWindow = (nextWindowStartTime: number) => {
-  const currentTime = Date.now();
-  const timeRemaining = Math.max(0, nextWindowStartTime - currentTime);
-  
-  // Convert to hours and minutes
-  let hours = Math.floor(timeRemaining / (1000 * 60 * 60));
-  let minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-  
-  // Ensure hours doesn't exceed 24 (for display purposes)
-  if (hours >= 24) {
-    // If more than 24 hours, just say "check back tomorrow"
-    hours = 24;
-    minutes = 0;
-  }
-  
-  return { hours, minutes };
-};
-
-/**
- * Formats a time window for display
+ * Formats a timestamp for display
  * @param timestamp The timestamp to format
  * @returns Formatted time string (e.g., "9:00 AM")
  */
-export const formatTimeForDisplay = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+export const formatTime = (timestamp: number): string => {
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 };
 
 /**
- * Calculates the next day's window start time
- * @param preferredStartHour The preferred start hour (0-23)
- * @returns Timestamp for the start of the next day's earliest possible window
+ * Calculates time until a target timestamp
+ * @param targetTime Target timestamp
+ * @returns Object with hours and minutes until target
  */
-export const getNextDayWindowStart = (preferredStartHour: number): number => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(preferredStartHour, 0, 0, 0);
-  return tomorrow.getTime();
-};
-
-/**
- * Parses a time string in HH:MM format to hours and minutes
- * @param timeString Time string in HH:MM format
- * @returns Object with hours and minutes as numbers
- */
-export const parseTimeString = (timeString: string): { hours: number; minutes: number } => {
-  const [hours, minutes] = timeString.split(':').map(Number);
+export const getTimeUntil = (targetTime: number) => {
+  const now = Date.now();
+  const diff = Math.max(0, targetTime - now);
+  
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  
   return { hours, minutes };
 };
 
 /**
- * Converts a time range in HH:MM format to hour values
- * @param timeRange Time range object with start and end in HH:MM format
- * @returns Object with startHour and endHour as numbers
+ * Validates time range format
+ * @param start Start time in "HH:MM" format
+ * @param end End time in "HH:MM" format
+ * @returns Boolean indicating if the range is valid
  */
-export const timeRangeToHours = (timeRange: { start: string; end: string }): { startHour: number; endHour: number } => {
-  const { hours: startHour } = parseTimeString(timeRange.start);
-  const { hours: endHour } = parseTimeString(timeRange.end);
-  return { startHour, endHour };
+export const validateTimeRange = (start: string, end: string): boolean => {
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  
+  if (!timeRegex.test(start) || !timeRegex.test(end)) {
+    return false;
+  }
+  
+  const [startHour, startMinute] = start.split(':').map(Number);
+  const [endHour, endMinute] = end.split(':').map(Number);
+  
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  
+  // Must have at least 1 hour difference
+  return endMinutes - startMinutes >= 60;
 };

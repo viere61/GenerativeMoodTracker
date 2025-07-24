@@ -201,7 +201,7 @@ class UserPreferencesService {
         return JSON.parse(userSettingsData);
       }
       
-      console.log('📧 No email settings found in any storage location');
+
       return null;
     } catch (error) {
       console.error('Get email notification settings error:', error);

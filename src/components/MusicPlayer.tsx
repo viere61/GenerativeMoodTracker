@@ -84,7 +84,6 @@ const SliderComponent = ({
 };
 import { Ionicons } from '@expo/vector-icons';
 import MusicGenerationService from '../services/MusicGenerationService';
-import NotificationService from '../services/NotificationService';
 import { GeneratedMusic } from '../types';
 import * as FileSystem from 'expo-file-system';
 

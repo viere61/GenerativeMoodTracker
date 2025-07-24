@@ -41,10 +41,10 @@ describe('TimeWindowValidator', () => {
     (TimeWindowService.getOrCreateDailyWindow as jest.Mock).mockResolvedValue(mockDailyWindow);
     (UserPreferencesService.getPreferences as jest.Mock).mockResolvedValue(mockPreferences);
     (timeWindowUtils.isWithinTimeWindow as jest.Mock).mockReturnValue(true);
-    (timeWindowUtils.formatTimeForDisplay as jest.Mock).mockImplementation((timestamp) => {
+    (timeWindowUtils.formatTime as jest.Mock).mockImplementation((timestamp) => {
       return timestamp === mockWindowStart ? '10:00 AM' : '11:00 AM';
     });
-    (timeWindowUtils.getTimeUntilNextWindow as jest.Mock).mockReturnValue({ hours: 2, minutes: 30 });
+    (timeWindowUtils.getTimeUntil as jest.Mock).mockReturnValue({ hours: 2, minutes: 30 });
     (timeWindowUtils.getNextDayWindowStart as jest.Mock).mockReturnValue(new Date().setHours(9, 0, 0, 0) + 86400000);
     (timeWindowUtils.timeRangeToHours as jest.Mock).mockReturnValue({ startHour: 9, endHour: 21 });
   });

@@ -5,7 +5,7 @@ import EmailNotificationSettings from '../components/EmailNotificationSettings';
 import PushNotificationSettings from '../components/PushNotificationSettings';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
-import NotificationService from '../services/NotificationService';
+import PushNotificationService from '../services/PushNotificationService';
 import MoodEntryService from '../services/MoodEntryService';
 import { AntDesign } from '@expo/vector-icons';
 
@@ -53,7 +53,7 @@ const SettingsScreen = () => {
         return;
       }
       
-      await TimeWindowService.resetDailyWindow(userId);
+              await TimeWindowService.resetWindow(userId);
       await MoodEntryService.deleteTodaysMoodEntry(userId);
       Alert.alert('Success', 'Daily log status has been reset. You can now log a new mood entry today.');
     } catch (error) {
@@ -75,7 +75,7 @@ const SettingsScreen = () => {
       
       // If enabling notifications, request permissions
       if (value) {
-        const permissionsGranted = await NotificationService.requestPermissions();
+        const permissionsGranted = await PushNotificationService.getInstance().getPermissionsStatus();
         if (!permissionsGranted) {
           Alert.alert(
             'Notification Permission Required',
@@ -87,7 +87,7 @@ const SettingsScreen = () => {
         }
       } else {
         // If disabling, cancel all scheduled notifications
-        await NotificationService.cancelAllNotifications();
+        await PushNotificationService.getInstance().cancelAllMoodReminders();
       }
     } catch (error) {
       console.error('Notifications toggle error:', error);
@@ -149,11 +149,17 @@ const SettingsScreen = () => {
         return;
       }
       
+      // Must have at least 1 hour difference for the window
+      if (endMinutes - startMinutes < 60) {
+        Alert.alert('Invalid Time Range', 'Time range must be at least 1 hour');
+        return;
+      }
+      
       // Update the time range
       await updatePreferredTimeRange({ start: startTime, end: endTime });
       
       // Reset the daily window to apply the new time range
-      await TimeWindowService.resetDailyWindow(userId);
+      await TimeWindowService.resetWindow(userId);
       
       // Close the modal
       setTimeRangeModalVisible(false);
@@ -202,7 +208,7 @@ const SettingsScreen = () => {
   // Handle test notification
   const handleTestNotification = async () => {
     try {
-      const sent = await NotificationService.sendTestNotification();
+      const sent = await PushNotificationService.getInstance().sendTestNotification('Test', 'This is a test notification');
       if (sent) {
         Alert.alert('Success', 'Test notification sent');
       } else {

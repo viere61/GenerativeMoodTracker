@@ -114,7 +114,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({
       }
     } else {
       // Disable push notifications
-      await pushNotificationService.cancelMoodReminders();
+      await pushNotificationService.cancelAllMoodReminders();
       const newSettings = { ...settings, enabled: false, reminderEnabled: false };
       await saveSettings(newSettings);
       Alert.alert('Disabled', 'Push notifications have been disabled');
@@ -129,17 +129,34 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({
 
     if (value) {
       // Schedule smart reminder based on time window
-      const result = await pushNotificationService.scheduleSmartMoodReminder();
-      if (result.success) {
-        const newSettings = { ...settings, reminderEnabled: true };
-        await saveSettings(newSettings);
-        Alert.alert('Success', 'Smart mood reminder enabled! You\'ll be notified when your daily mood logging window opens.');
-      } else {
-        Alert.alert('Error', `Failed to schedule reminder: ${result.error}`);
+      try {
+        const TimeWindowService = (await import('../services/TimeWindowService')).default;
+        const window = await TimeWindowService.getCurrentWindow('demo-user');
+        
+        // Only schedule if window is in the future
+        if (window.windowStart > Date.now()) {
+          const result = await pushNotificationService.scheduleWindowNotification(
+            window.windowStart,
+            window.windowEnd
+          );
+          if (result.success) {
+            const newSettings = { ...settings, reminderEnabled: true };
+            await saveSettings(newSettings);
+            Alert.alert('Success', 'Smart mood reminder enabled! You\'ll be notified when your daily mood logging window opens.');
+          } else {
+            Alert.alert('Error', `Failed to schedule reminder: ${result.error}`);
+          }
+        } else {
+          const newSettings = { ...settings, reminderEnabled: true };
+          await saveSettings(newSettings);
+          Alert.alert('Success', 'Smart mood reminder enabled! You\'ll be notified for tomorrow\'s window.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to schedule reminder');
       }
     } else {
       // Cancel reminders
-      await pushNotificationService.cancelMoodReminders();
+      await pushNotificationService.cancelAllMoodReminders();
       const newSettings = { ...settings, reminderEnabled: false };
       await saveSettings(newSettings);
       Alert.alert('Cancelled', 'Mood reminders have been cancelled');
@@ -148,10 +165,9 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({
 
   const testNotification = async () => {
     try {
-      const result = await pushNotificationService.sendImmediateNotification(
+      const result = await pushNotificationService.sendTestNotification(
         'Test Notification',
-        'This is a test notification from your mood tracker!',
-        { type: 'test' }
+        'This is a test notification from your mood tracker!'
       );
       if (result.success) {
         Alert.alert('Success', 'Test notification sent!');
