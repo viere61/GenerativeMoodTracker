@@ -71,6 +71,62 @@ export const generateRandomWindow = (preferredStart: string, preferredEnd: strin
 };
 
 /**
+ * Generates a random 1-hour logging window for a specific date
+ * @param preferredStart Start time in "HH:MM" format (e.g., "09:00")
+ * @param preferredEnd End time in "HH:MM" format (e.g., "21:00")
+ * @param targetDate The specific date to generate the window for
+ * @returns Object containing window start and end timestamps, and the date
+ */
+export const generateRandomWindowForDate = (preferredStart: string, preferredEnd: string, targetDate: Date) => {
+  // Parse the preferred time range
+  const [startHour, startMinute] = preferredStart.split(':').map(Number);
+  const [endHour, endMinute] = preferredEnd.split(':').map(Number);
+  
+  // Convert to minutes for easier calculation
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  
+  // Calculate available range (subtract 60 minutes for the 1-hour window)
+  const availableRange = endMinutes - startMinutes - 60;
+  
+  if (availableRange <= 0) {
+    throw new Error('Time range too small for 1-hour window');
+  }
+  
+  // Generate random offset within available range
+  const randomOffset = Math.floor(Math.random() * availableRange);
+  const windowStartMinutes = startMinutes + randomOffset;
+  
+  // Convert back to hours and minutes
+  const windowStartHour = Math.floor(windowStartMinutes / 60);
+  const windowStartMinute = windowStartMinutes % 60;
+  
+  // Create the window start date for the specific target date
+  const windowDate = new Date(targetDate);
+  windowDate.setHours(windowStartHour, windowStartMinute, 0, 0);
+  
+  // Create window end date (1 hour later)
+  const windowEndDate = new Date(windowDate);
+  windowEndDate.setHours(windowEndDate.getHours() + 1);
+  
+  const dateString = windowDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+  
+  console.log('Generated random window for date:', {
+    targetDate: targetDate.toDateString(),
+    preferredRange: `${preferredStart} - ${preferredEnd}`,
+    windowStart: windowDate.toLocaleString(),
+    windowEnd: windowEndDate.toLocaleString(),
+    dateString
+  });
+  
+  return {
+    windowStart: windowDate.getTime(),
+    windowEnd: windowEndDate.getTime(),
+    date: dateString
+  };
+};
+
+/**
  * Checks if the current time is within the logging window
  * @param windowStart Window start timestamp
  * @param windowEnd Window end timestamp

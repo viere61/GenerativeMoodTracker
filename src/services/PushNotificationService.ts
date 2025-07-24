@@ -368,7 +368,126 @@ export class PushNotificationService {
   }
 
   /**
-   * Handle mood reminder notifications - no longer needed since scheduling works correctly
+   * Schedule notifications for multiple windows
+   */
+  async scheduleMultiDayNotifications(windows: any[]): Promise<{ 
+    success: boolean; 
+    scheduledCount: number; 
+    errors: string[] 
+  }> {
+    const results = {
+      success: true,
+      scheduledCount: 0,
+      errors: [] as string[]
+    };
+
+    console.log('🗓️ [scheduleMultiDayNotifications] Scheduling notifications for', windows.length, 'windows');
+
+    // Cancel all existing notifications ONCE at the beginning
+    console.log('🗓️ [scheduleMultiDayNotifications] Cancelling all existing notifications first...');
+    await this.cancelAllMoodReminders();
+
+    for (const window of windows) {
+      try {
+        const now = Date.now();
+        const windowStart = window.windowStart;
+        
+        // Only schedule if window is in the future (at least 1 minute away)
+        if (windowStart <= now + 60000) {
+          console.log('🗓️ [scheduleMultiDayNotifications] Skipping past/near window:', new Date(windowStart).toLocaleString());
+          continue;
+        }
+
+        // Schedule WITHOUT cancelling (we already cancelled all at the beginning)
+        const result = await this.scheduleWindowNotificationWithoutCancel(
+          window.windowStart,
+          window.windowEnd,
+          "Time to Log Your Mood!",
+          `Your mood logging window is now open. You can log your mood until ${new Date(window.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+        );
+
+        if (result.success) {
+          results.scheduledCount++;
+          console.log('🗓️ [scheduleMultiDayNotifications] ✅ Scheduled for:', new Date(windowStart).toLocaleString());
+        } else {
+          results.errors.push(`Failed to schedule for ${new Date(windowStart).toLocaleString()}: ${result.error}`);
+        }
+      } catch (error) {
+        const errorMsg = `Error scheduling for window: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        results.errors.push(errorMsg);
+        console.error('🗓️ [scheduleMultiDayNotifications] ❌', errorMsg);
+      }
+    }
+
+    if (results.errors.length > 0) {
+      results.success = false;
+    }
+
+    console.log('🗓️ [scheduleMultiDayNotifications] Summary:', {
+      scheduled: results.scheduledCount,
+      errors: results.errors.length,
+      success: results.success
+    });
+
+    return results;
+  }
+
+  /**
+   * Schedule a notification for when the logging window starts (without cancelling existing notifications)
+   */
+  async scheduleWindowNotificationWithoutCancel(
+    windowStartTime: number,
+    windowEndTime: number,
+    title: string = "Time to Log Your Mood!",
+    body?: string
+  ): Promise<{ success: boolean; notificationId?: string; error?: string }> {
+    try {
+      const now = Date.now();
+      const windowStart = new Date(windowStartTime);
+      const windowEnd = new Date(windowEndTime);
+      const minutesUntilWindow = (windowStartTime - now) / (1000 * 60);
+      
+      console.log('🔔 [scheduleWindowNotificationWithoutCancel] Scheduling for:', windowStart.toLocaleString());
+
+      // Only schedule if the window is in the future (at least 1 minute away)
+      if (windowStartTime <= now + 60000) { // 1 minute buffer
+        console.log('🔔 [scheduleWindowNotificationWithoutCancel] ❌ Window start time is too soon or in the past');
+        return { success: false, error: 'Window start time is not far enough in the future' };
+      }
+
+      // Create the notification body
+      const notificationBody = body || 
+        `Your mood logging window is now open. You can log your mood until ${windowEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+
+      // Schedule the notification (WITHOUT cancelling existing ones)
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body: notificationBody,
+          data: { 
+            type: 'mood_reminder',
+            windowStart: windowStartTime,
+            windowEnd: windowEndTime,
+            scheduledAt: now // Track when this was scheduled
+          },
+        },
+        trigger: {
+          type: 'date',
+          date: windowStart,
+        } as any,
+      });
+
+      console.log('🔔 [scheduleWindowNotificationWithoutCancel] ✅ Scheduled for:', windowStart.toLocaleString(), '(ID:', notificationId, ')');
+
+      return { success: true, notificationId };
+    } catch (error) {
+      console.error('❌ [scheduleWindowNotificationWithoutCancel] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Handle mood reminder notifications and ensure future windows exist
    */
   private async handleEarlyMoodReminder(notification: any) {
     const notificationData = notification.request.content.data;
@@ -383,8 +502,32 @@ export class PushNotificationService {
       isWithinWindow: windowStart && windowEnd && now >= windowStart && now <= windowEnd
     });
 
-    // Since scheduling now works correctly, we don't need to reschedule
-    // The notification handler will determine if it should be shown
+    // Smart listener: Ensure tomorrow's window exists when user gets notification
+    if (windowStart && windowEnd && now >= windowStart && now <= windowEnd) {
+      console.log('🔔 [handleEarlyMoodReminder] Window is open - ensuring tomorrow\'s window exists...');
+      try {
+        const TimeWindowService = (await import('./TimeWindowService')).default;
+        const tomorrowWindow = await TimeWindowService.ensureTomorrowWindowExists('demo-user');
+        
+        if (tomorrowWindow) {
+          // Schedule notification for tomorrow's window
+          const result = await this.scheduleWindowNotification(
+            tomorrowWindow.windowStart,
+            tomorrowWindow.windowEnd,
+            "Time to Log Your Mood!",
+            `Your mood logging window is now open. You can log your mood until ${new Date(tomorrowWindow.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+          );
+          
+          if (result.success) {
+            console.log('🔔 [handleEarlyMoodReminder] ✅ Scheduled notification for tomorrow\'s window');
+          } else {
+            console.log('🔔 [handleEarlyMoodReminder] ❌ Failed to schedule tomorrow\'s notification:', result.error);
+          }
+        }
+      } catch (error) {
+        console.error('🔔 [handleEarlyMoodReminder] Error ensuring tomorrow\'s window:', error);
+      }
+    }
   }
 
 

@@ -102,25 +102,19 @@ const HomeScreen = () => {
       
       // Reset time window for today
       const newWindow = await TimeWindowService.resetWindow(userId);
+      console.log('✅ Updated today\'s window with new time range');
 
-      // Schedule notification for the new window if it's in the future
-      const now = Date.now();
-      const timeUntilWindow = newWindow.windowStart - now;
+      // Create multi-day windows with new time range (3 days including today)
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 3);
+      console.log('✅ Created', multiDayWindows.length, 'multi-day windows with new time range');
 
-      console.log('Time until new window start:', {
-        now: new Date(now).toLocaleString(),
-        windowStart: new Date(newWindow.windowStart).toLocaleString(),
-        timeUntilWindow: timeUntilWindow / 1000 / 60 + ' minutes'
-      });
-
-      if (timeUntilWindow > 5 * 60 * 1000) { // 5 minutes in milliseconds
-        console.log('Scheduling notification for new window');
-        await pushNotificationService.scheduleWindowNotification(
-          newWindow.windowStart,
-          newWindow.windowEnd
-        );
+      // Schedule notifications for all future windows
+      const scheduleResult = await pushNotificationService.scheduleMultiDayNotifications(multiDayWindows);
+      
+      if (scheduleResult.success) {
+        console.log('✅ Multi-day notifications scheduled successfully:', scheduleResult.scheduledCount, 'notifications');
       } else {
-        console.log('New window is too soon, not scheduling notification');
+        console.log('⚠️ Some notifications failed to schedule:', scheduleResult.errors);
       }
 
       // Check new time window
@@ -140,11 +134,20 @@ const HomeScreen = () => {
       const userId = 'demo-user';
       const result = await TimeWindowService.canLogMood(userId);
       
+      // If current window has passed, get the next available window for display
+      let displayWindow = result.window;
+      if (!result.canLog && Date.now() > result.window.windowEnd) {
+        const nextWindow = await TimeWindowService.getNextAvailableWindow(userId);
+        if (nextWindow) {
+          displayWindow = nextWindow;
+        }
+      }
+      
       setTimeWindowStatus({
         canLog: result.canLog,
         message: result.message,
-        windowStart: result.window.windowStart,
-        windowEnd: result.window.windowEnd,
+        windowStart: displayWindow.windowStart,
+        windowEnd: displayWindow.windowEnd,
       });
     } catch (error) {
       console.error('Error checking time window:', error);
@@ -194,35 +197,37 @@ const HomeScreen = () => {
 
     try {
       setLoading(true);
+      console.log('🏠 [handleResetTimeWindow] Starting time window reset with multi-day scheduling...');
+      
       // Cancel any existing notifications
       await pushNotificationService.cancelAllMoodReminders();
-      // Reset the time window
+      
+      // Reset the time window (creates today's window)
       const newWindow = await TimeWindowService.resetWindow(userId);
+      console.log('🏠 [handleResetTimeWindow] ✅ Reset today\'s window');
 
-      // Only schedule a notification if the window is at least 5 minutes in the future
-      // This prevents immediate notifications when resetting the window
-      const now = Date.now();
-      const windowStart = newWindow.windowStart;
-      const timeUntilWindow = windowStart - now;
+      // Create multi-day windows (3 days including today)
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 3);
+      console.log('🏠 [handleResetTimeWindow] ✅ Created', multiDayWindows.length, 'multi-day windows');
 
-      console.log('Time until window start:', {
-        now: new Date(now).toLocaleString(),
-        windowStart: new Date(windowStart).toLocaleString(),
-        timeUntilWindow: timeUntilWindow / 1000 / 60 + ' minutes'
-      });
+      // Log today's window details to verify it's correct
+      const todayWindow = multiDayWindows.find(w => w.date === new Date().toISOString().split('T')[0]);
+      if (todayWindow) {
+        console.log('🏠 [handleResetTimeWindow] Today\'s window details:', {
+          date: todayWindow.date,
+          windowStart: new Date(todayWindow.windowStart).toLocaleString(),
+          windowEnd: new Date(todayWindow.windowEnd).toLocaleString(),
+          minutesFromNow: (todayWindow.windowStart - Date.now()) / 1000 / 60
+        });
+      }
 
-      // Always try to schedule notification if window is in the future
-      // The PushNotificationService will handle the validation
-      console.log('🏠 [handleResetTimeWindow] Attempting to schedule notification...');
-      const scheduleResult = await pushNotificationService.scheduleWindowNotification(
-        newWindow.windowStart,
-        newWindow.windowEnd
-      );
+      // Schedule notifications for all future windows
+      const scheduleResult = await pushNotificationService.scheduleMultiDayNotifications(multiDayWindows);
       
       if (scheduleResult.success) {
-        console.log('🏠 [handleResetTimeWindow] ✅ Notification scheduled successfully');
+        console.log('🏠 [handleResetTimeWindow] ✅ Multi-day notifications scheduled successfully:', scheduleResult.scheduledCount, 'notifications');
       } else {
-        console.log('🏠 [handleResetTimeWindow] ❌ Failed to schedule notification:', scheduleResult.error);
+        console.log('🏠 [handleResetTimeWindow] ⚠️ Some notifications failed to schedule:', scheduleResult.errors);
       }
 
       await checkTimeWindow();

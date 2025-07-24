@@ -55,22 +55,29 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
     const updateCountdown = () => {
       const currentTime = Date.now();
       
-      if (currentTime >= nextWindowTime) {
-        // Countdown is complete
+      // Check if the window has expired (passed windowEndTime)
+      if (windowEndTime && currentTime > windowEndTime) {
+        // Window has completely passed - show expired state
+        setIsComplete(false);
+        setTimeRemaining({ hours: 0, minutes: 0 });
+        return;
+      }
+      
+      if (currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
+        // Window is currently open
         setIsComplete(true);
         setTimeRemaining({ hours: 0, minutes: 0 });
         
         // Only trigger the countdown completion callback once
-        // This prevents multiple triggers when the component re-renders
         if (onCountdownComplete && !isComplete) {
-          console.log('TimeWindowCountdown: Countdown complete, triggering callback');
+          console.log('TimeWindowCountdown: Window opened, triggering callback');
           onCountdownComplete();
         }
         
         return;
       }
       
-      // Calculate time remaining
+      // Calculate time remaining until window opens
       const diffMs = Math.max(0, nextWindowTime - currentTime);
       const hours = Math.floor(diffMs / (1000 * 60 * 60));
       const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -79,12 +86,15 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
       console.log('Time remaining calculation:', {
         currentTime: new Date(currentTime).toLocaleString(),
         nextWindowTime: new Date(nextWindowTime).toLocaleString(),
+        windowEndTime: windowEndTime ? new Date(windowEndTime).toLocaleString() : 'none',
         diffMs,
         hours,
-        minutes
+        minutes,
+        windowExpired: windowEndTime && currentTime > windowEndTime
       });
       
       setTimeRemaining({ hours, minutes });
+      setIsComplete(false);
     };
     
     // Initial update
@@ -95,11 +105,19 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
     
     // Clean up interval on unmount
     return () => clearInterval(intervalId);
-  }, [nextWindowTime, onCountdownComplete]);
+  }, [nextWindowTime, windowEndTime, onCountdownComplete, isComplete]);
   
   // Format the countdown text
   const formatCountdown = () => {
-    if (isComplete) {
+    const currentTime = Date.now();
+    
+    // Check if window has completely expired
+    if (windowEndTime && currentTime > windowEndTime) {
+      return 'Window has closed';
+    }
+    
+    // Check if window is currently open
+    if (isComplete && currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
       return 'Your time window is now open!';
     }
     
@@ -113,14 +131,24 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
       return `${actualHours}h ${minutes}m`;
     } else if (hours > 0) {
       return `${hours}h ${minutes}m`;
-    } else {
+    } else if (minutes > 0) {
       return `${minutes}m`;
+    } else {
+      return 'Opening soon...';
     }
   };
   
   // Get the background color based on time remaining
   const getBackgroundColor = () => {
-    if (isComplete) {
+    const currentTime = Date.now();
+    
+    // Check if window has completely expired
+    if (windowEndTime && currentTime > windowEndTime) {
+      return '#f5f5f5'; // Light gray when window has passed
+    }
+    
+    // Check if window is currently open
+    if (isComplete && currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
       return '#e6f7ff'; // Light blue when window is open
     }
     
@@ -137,12 +165,40 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
   
   // Get the formatted time string
   const getFormattedTime = () => {
-    if (isComplete && windowEndTime) {
-      return `Available until ${formatTime(windowEndTime)}`;
+    const currentTime = Date.now();
+    
+    // Check if window has completely expired
+    if (windowEndTime && currentTime > windowEndTime) {
+      // Check if the next window is today or tomorrow
+      const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
+      const isTomorrow = new Date(nextWindowTime).toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
+      
+      if (isToday) {
+        return `Next window opens at ${formatTime(nextWindowTime)} today`;
+      } else if (isTomorrow) {
+        return `Next window opens at ${formatTime(nextWindowTime)} tomorrow`;
+      } else {
+        const nextDate = new Date(nextWindowTime);
+        return `Next window opens ${nextDate.toLocaleDateString()} at ${formatTime(nextWindowTime)}`;
+      }
+    }
+    
+    // Check if window is currently open
+    if (isComplete && currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
+      return windowEndTime ? `Available until ${formatTime(windowEndTime)}` : 'Available now';
     } else if (!isComplete) {
       // Check if the next window is today or tomorrow
       const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
-      return `Opens at ${formatTime(nextWindowTime)}${isToday ? '' : ' tomorrow'}`;
+      const isTomorrow = new Date(nextWindowTime).toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
+      
+      if (isToday) {
+        return `Opens at ${formatTime(nextWindowTime)} today`;
+      } else if (isTomorrow) {
+        return `Opens at ${formatTime(nextWindowTime)} tomorrow`;
+      } else {
+        const nextDate = new Date(nextWindowTime);
+        return `Opens ${nextDate.toLocaleDateString()} at ${formatTime(nextWindowTime)}`;
+      }
     }
     return '';
   };
@@ -156,15 +212,31 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
       ]}
     >
       <Text style={styles.label}>
-        {isComplete ? 'Time Window Status:' : 'Next window in:'}
+        {(() => {
+          const currentTime = Date.now();
+          if (windowEndTime && currentTime > windowEndTime) {
+            return 'Next window:';
+          } else if (isComplete && currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
+            return 'Time Window Status:';
+          } else {
+            return 'Next window in:';
+          }
+        })()}
       </Text>
       <Text style={[
         styles.countdown, 
-        isComplete ? styles.openText : (
-          timeRemaining.hours === 0 && timeRemaining.minutes < 10 
-            ? styles.urgentText 
-            : styles.normalText
-        )
+        (() => {
+          const currentTime = Date.now();
+          if (windowEndTime && currentTime > windowEndTime) {
+            return styles.expiredText;
+          } else if (isComplete && currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
+            return styles.openText;
+          } else if (timeRemaining.hours === 0 && timeRemaining.minutes < 10) {
+            return styles.urgentText;
+          } else {
+            return styles.normalText;
+          }
+        })()
       ]}>
         {formatCountdown()}
       </Text>
@@ -209,6 +281,9 @@ const styles = StyleSheet.create({
   },
   normalText: {
     color: '#333',
+  },
+  expiredText: {
+    color: '#666',
   }
 });
 

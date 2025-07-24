@@ -1,6 +1,6 @@
 import { DailyWindow } from '../types';
 import UserPreferencesService from './UserPreferencesService';
-import { generateRandomWindow, isWithinWindow, formatTime, getTimeUntil } from '../utils/timeWindow';
+import { generateRandomWindow, generateRandomWindowForDate, isWithinWindow, formatTime, getTimeUntil } from '../utils/timeWindow';
 import StorageService from './StorageService';
 
 const DAILY_WINDOW_KEY = 'daily_window';
@@ -104,7 +104,17 @@ class TimeWindowService {
    */
   async resetWindow(userId: string): Promise<DailyWindow> {
     console.log('Resetting window for user:', userId);
-    return await this.createNewWindow(userId);
+    
+    // Create new window using the main function
+    const newWindow = await this.createNewWindow(userId);
+    
+    // Also save it using the date-specific key to ensure consistency
+    // This ensures multi-day functions can find the reset window
+    await this.saveDailyWindowForDate(newWindow, newWindow.date);
+    
+    console.log('✅ Reset window saved with both key formats for consistency');
+    
+    return newWindow;
   }
   
   /**
@@ -212,6 +222,257 @@ class TimeWindowService {
     } catch (error) {
       console.error('Error checking if logged today:', error);
       return false;
+    }
+  }
+
+  /**
+   * Get daily window for a specific date
+   */
+  async getDailyWindowForDate(userId: string, date: string): Promise<DailyWindow | null> {
+    try {
+      const key = `${DAILY_WINDOW_KEY}_${userId}_${date}`;
+      const windowData = await StorageService.getItem(key);
+      
+      if (!windowData) {
+        return null;
+      }
+      
+      return JSON.parse(windowData) as DailyWindow;
+    } catch (error) {
+      console.error('Error getting daily window for date:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save daily window for a specific date
+   */
+  async saveDailyWindowForDate(dailyWindow: DailyWindow, date: string): Promise<void> {
+    try {
+      const key = `${DAILY_WINDOW_KEY}_${dailyWindow.userId}_${date}`;
+      await StorageService.setItem(key, JSON.stringify(dailyWindow));
+      console.log('Saved daily window for date:', {
+        date: date,
+        windowStart: new Date(dailyWindow.windowStart).toLocaleString(),
+        windowEnd: new Date(dailyWindow.windowEnd).toLocaleString()
+      });
+    } catch (error) {
+      console.error('Error saving daily window for date:', error);
+      throw new Error('Failed to save daily window for date');
+    }
+  }
+
+  /**
+   * Create windows for multiple days ahead and schedule notifications
+   */
+  async createMultiDayWindows(userId: string, daysAhead: number = 3): Promise<DailyWindow[]> {
+    try {
+      // Get user preferences
+      const preferences = await UserPreferencesService.getPreferences(userId);
+      if (!preferences) {
+        throw new Error('User preferences not found');
+      }
+
+      const { start, end } = preferences.preferredTimeRange;
+      const windows: DailyWindow[] = [];
+      
+      console.log('🗓️ Creating multi-day windows for', daysAhead, 'days ahead');
+
+      for (let i = 0; i < daysAhead; i++) {
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + i);
+        const dateString = targetDate.toISOString().split('T')[0];
+        
+                 // Check if window already exists for this date
+         let existingWindow = await this.getDailyWindowForDate(userId, dateString);
+         
+         // For today, also check the main daily window key in case it was just reset
+         if (!existingWindow && i === 0) {
+           const todayWindow = await this.getDailyWindow(userId);
+           if (todayWindow && todayWindow.date === dateString) {
+             existingWindow = todayWindow;
+             // Save it with the date-specific key for consistency
+             await this.saveDailyWindowForDate(todayWindow, dateString);
+             console.log('📅 Found today\'s reset window, saving with date-specific key');
+           }
+         }
+         
+         if (existingWindow) {
+           // Check if existing window matches current preferences
+           const windowMatchesPreferences = this.isWindowWithinTimeRange(existingWindow.windowStart, start, end);
+           
+           console.log('📅 Window already exists for', dateString, ':', {
+             windowStart: new Date(existingWindow.windowStart).toLocaleString(),
+             windowEnd: new Date(existingWindow.windowEnd).toLocaleString(),
+             matchesCurrentTimeRange: windowMatchesPreferences,
+             currentTimeRange: `${start} - ${end}`
+           });
+
+           if (windowMatchesPreferences) {
+             // Window matches current preferences, keep it
+             windows.push(existingWindow);
+             continue;
+           } else {
+             // Window doesn't match current preferences, delete and regenerate
+             console.log('🔄 Window doesn\'t match current time range, regenerating...');
+             await this.deleteDailyWindowForDate(userId, dateString);
+             // Continue to regenerate below
+           }
+         }
+
+                 // Generate random window for this specific date
+         const { windowStart, windowEnd } = generateRandomWindowForDate(start, end, targetDate);
+        
+        // Create daily window object
+        const dailyWindow: DailyWindow = {
+          userId,
+          date: dateString,
+          windowStart,
+          windowEnd,
+          hasLogged: false,
+          notificationSent: false
+        };
+
+        // Save window for this specific date
+        await this.saveDailyWindowForDate(dailyWindow, dateString);
+        windows.push(dailyWindow);
+        
+        console.log('📅 Created window for', dateString, ':', {
+          windowStart: new Date(windowStart).toLocaleString(),
+          windowEnd: new Date(windowEnd).toLocaleString()
+        });
+      }
+
+      return windows;
+    } catch (error) {
+      console.error('Error creating multi-day windows:', error);
+      throw new Error('Failed to create multi-day windows');
+    }
+  }
+
+  /**
+   * Get the next available window (today if not logged, otherwise tomorrow or later)
+   */
+  async getNextAvailableWindow(userId: string): Promise<DailyWindow | null> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const now = Date.now();
+
+      // Check if today's window is still available
+      const todayWindow = await this.getDailyWindowForDate(userId, today);
+      if (todayWindow && !todayWindow.hasLogged && now <= todayWindow.windowEnd) {
+        return todayWindow;
+      }
+
+      // Look for the next available window in the next 7 days
+      for (let i = 1; i <= 7; i++) {
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + i);
+        const dateString = targetDate.toISOString().split('T')[0];
+        
+        const window = await this.getDailyWindowForDate(userId, dateString);
+        if (window && !window.hasLogged) {
+          return window;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error getting next available window:', error);
+      return null;
+    }
+  }
+
+    /**
+   * Check if a window time falls within the specified time range
+   */
+  private isWindowWithinTimeRange(windowStart: number, preferredStart: string, preferredEnd: string): boolean {
+    const windowDate = new Date(windowStart);
+    const windowHour = windowDate.getHours();
+    const windowMinute = windowDate.getMinutes();
+    const windowTotalMinutes = windowHour * 60 + windowMinute;
+    
+    const [startHour, startMinute] = preferredStart.split(':').map(Number);
+    const [endHour, endMinute] = preferredEnd.split(':').map(Number);
+    
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    
+    // Window should start within the preferred range (with some tolerance for the 1-hour window)
+    return windowTotalMinutes >= startTotalMinutes && windowTotalMinutes <= (endTotalMinutes - 60);
+  }
+
+  /**
+   * Delete a daily window for a specific date
+   */
+  async deleteDailyWindowForDate(userId: string, date: string): Promise<void> {
+    try {
+      const key = `${DAILY_WINDOW_KEY}_${userId}_${date}`;
+      await StorageService.removeItem(key);
+      console.log('🗑️ Deleted daily window for date:', date);
+    } catch (error) {
+      console.error('Error deleting daily window for date:', error);
+    }
+  }
+
+  /**
+   * Ensure tomorrow's window exists
+   */
+  async ensureTomorrowWindowExists(userId: string): Promise<DailyWindow | null> {
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowDateString = tomorrow.toISOString().split('T')[0];
+      
+      // Get user preferences first
+      const preferences = await UserPreferencesService.getPreferences(userId);
+      if (!preferences) {
+        throw new Error('User preferences not found');
+      }
+
+      const { start, end } = preferences.preferredTimeRange;
+      
+      // Check if tomorrow's window already exists
+      const existingWindow = await this.getDailyWindowForDate(userId, tomorrowDateString);
+      if (existingWindow) {
+        // Check if existing window matches current preferences
+        if (this.isWindowWithinTimeRange(existingWindow.windowStart, start, end)) {
+          console.log('📅 Tomorrow\'s window already exists and matches current preferences');
+          return existingWindow;
+        } else {
+          console.log('📅 Tomorrow\'s window exists but doesn\'t match current time range - regenerating...');
+          await this.deleteDailyWindowForDate(userId, tomorrowDateString);
+        }
+      }
+
+      console.log('📅 Creating tomorrow\'s window...');
+      
+      // Generate random window for tomorrow
+      const { windowStart, windowEnd } = generateRandomWindowForDate(start, end, tomorrow);
+      
+      // Create daily window object
+      const tomorrowWindow: DailyWindow = {
+        userId,
+        date: tomorrowDateString,
+        windowStart,
+        windowEnd,
+        hasLogged: false,
+        notificationSent: false
+      };
+
+      // Save tomorrow's window
+      await this.saveDailyWindowForDate(tomorrowWindow, tomorrowDateString);
+      
+      console.log('📅 ✅ Created tomorrow\'s window:', {
+        date: tomorrowDateString,
+        windowStart: new Date(windowStart).toLocaleString(),
+        windowEnd: new Date(windowEnd).toLocaleString()
+      });
+
+      return tomorrowWindow;
+    } catch (error) {
+      console.error('Error ensuring tomorrow\'s window exists:', error);
+      return null;
     }
   }
 }
