@@ -542,6 +542,48 @@ class MusicGenerationService {
   }
 
   /**
+   * Diagnostic function to check music generation configuration
+   */
+  async diagnoseConfiguration(): Promise<{
+    isWeb: boolean;
+    debugMode: boolean;
+    elevenLabsEnabled: boolean;
+    elevenLabsKeyConfigured: boolean;
+    backendUrl: string;
+    hasFileSystemAccess: boolean;
+  }> {
+    const diagnosis = {
+      isWeb,
+      debugMode: isDebugMode(),
+      elevenLabsEnabled: this.AI_SERVICES.ELEVENLABS.enabled,
+      elevenLabsKeyConfigured: this.AI_SERVICES.ELEVENLABS.apiKey !== 'YOUR_ELEVENLABS_API_KEY_HERE',
+      backendUrl: API_CONFIG.BACKEND_URL,
+      hasFileSystemAccess: !!FileSystem?.documentDirectory,
+    };
+    
+    console.log('🔍 [Music Generation Diagnosis]:', diagnosis);
+    
+    // Test backend connectivity
+    try {
+      console.log('🔍 [Testing Backend Connectivity]:', API_CONFIG.BACKEND_URL);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(API_CONFIG.BACKEND_URL, { 
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('🔍 [Backend Response]:', response.status, response.statusText);
+    } catch (error) {
+      console.error('🔍 [Backend Connection Failed]:', error);
+    }
+    
+    return diagnosis;
+  }
+
+  /**
    * Initialize the music service
    * Creates the local music directory if it doesn't exist
    */
@@ -579,32 +621,51 @@ class MusicGenerationService {
    */
   async generateMusic(userId: string, moodEntry: MoodEntry): Promise<GeneratedMusic | null> {
     try {
+      console.log('🎵 [generateMusic] Starting music generation for entry:', moodEntry.entryId);
+      console.log('🎵 [generateMusic] MoodEntry:', {
+        moodRating: moodEntry.moodRating,
+        emotionTags: moodEntry.emotionTags,
+        influences: moodEntry.influences,
+        reflection: moodEntry.reflection?.substring(0, 100)
+      });
+      
       // Check if music generation is already in progress
       if (this.generationInProgress) {
+        console.log('🎵 [generateMusic] Music generation already in progress, adding to queue');
         // Add to queue and return null
         this.generationQueue.push({ userId, moodEntry });
         return null;
       }
 
       this.generationInProgress = true;
+      console.log('🎵 [generateMusic] Music generation started');
 
       // Generate music parameters
       const parameters = this.generateMusicParameters(moodEntry);
+      console.log('🎵 [generateMusic] Generated parameters:', parameters);
 
       // Create music generation request
       const request = this.createMusicGenerationRequest(userId, moodEntry);
+      console.log('🎵 [generateMusic] Created request object');
 
       // Create music object
       const musicObject = this.createGeneratedMusicObject(userId, moodEntry, parameters);
+      console.log('🎵 [generateMusic] Created music object with ID:', musicObject.musicId);
 
       // Generate the actual music
+      console.log('🎵 [generateMusic] Calling generateMusicFromAPI...');
       const generatedMusic = await this.generateMusicFromAPI(request, musicObject, 0);
+      console.log('🎵 [generateMusic] generateMusicFromAPI completed, result:', generatedMusic ? 'SUCCESS' : 'FAILED');
 
-      // Store the generated music (mood entry update is handled by MoodEntryService)
-      if (isWeb) {
-        await WebStorageService.storeGeneratedMusic(userId, generatedMusic);
-      } else {
-        await LocalStorageManager.storeGeneratedMusic(userId, generatedMusic);
+      if (generatedMusic) {
+        console.log('🎵 [generateMusic] Storing generated music...');
+        // Store the generated music (mood entry update is handled by MoodEntryService)
+        if (isWeb) {
+          await WebStorageService.storeGeneratedMusic(userId, generatedMusic);
+        } else {
+          await LocalStorageManager.storeGeneratedMusic(userId, generatedMusic);
+        }
+        console.log('🎵 [generateMusic] Music stored successfully');
       }
 
       this.generationInProgress = false;
@@ -614,7 +675,11 @@ class MusicGenerationService {
 
       return generatedMusic;
     } catch (error) {
-      console.error('Failed to generate music:', error);
+      console.error('🎵 [generateMusic] Failed to generate music:', error);
+      console.error('🎵 [generateMusic] Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5) : undefined
+      });
       this.generationInProgress = false;
 
       // Process next item in queue if any
@@ -683,36 +748,50 @@ class MusicGenerationService {
       }
 
       // Try ElevenLabs AI generation first
+      console.log('🎵 [generateMusicFromAPI] ElevenLabs enabled:', this.AI_SERVICES.ELEVENLABS.enabled);
+      console.log('🎵 [generateMusicFromAPI] ElevenLabs API key configured:', this.AI_SERVICES.ELEVENLABS.apiKey !== 'YOUR_ELEVENLABS_API_KEY_HERE');
+      
       if (this.AI_SERVICES.ELEVENLABS.enabled) {
         try {
+          console.log('🎵 [generateMusicFromAPI] Attempting ElevenLabs generation...');
           return await this.tryElevenLabsGeneration(prompt, musicObject);
         } catch (error) {
+          console.error('🎵 [generateMusicFromAPI] ElevenLabs generation failed:', error instanceof Error ? error.message : String(error));
           if (isDebugMode()) {
             console.log('ElevenLabs generation failed, trying alternatives...');
           }
         }
+      } else {
+        console.log('🎵 [generateMusicFromAPI] ElevenLabs is disabled, skipping...');
       }
 
-
-
       // Try other AI services if available
+      console.log('🎵 [generateMusicFromAPI] Mubert enabled:', this.AI_SERVICES.MUBERT.enabled);
       if (this.AI_SERVICES.MUBERT.enabled) {
         try {
+          console.log('🎵 [generateMusicFromAPI] Attempting Mubert generation...');
           return await this.tryMubertGeneration(prompt, musicObject);
         } catch (error) {
+          console.error('🎵 [generateMusicFromAPI] Mubert generation failed:', error instanceof Error ? error.message : String(error));
           if (isDebugMode()) {
             console.log('Mubert generation failed, trying alternatives...');
           }
         }
+      } else {
+        console.log('🎵 [generateMusicFromAPI] Mubert is disabled, skipping...');
       }
 
       // Use enhanced procedural generation (AI models not available on free tier)
+      console.log('🎵 [generateMusicFromAPI] All AI services failed or disabled, falling back to procedural generation');
       if (isDebugMode()) {
         console.log('🎵 Using enhanced procedural music generation...');
         console.log('🎵 This creates sophisticated, mood-appropriate music using advanced algorithms');
       }
 
-      return await this.generateProceduralMusic(musicObject, request.moodEntry);
+      console.log('🎵 [generateMusicFromAPI] Calling generateProceduralMusic...');
+      const proceduralResult = await this.generateProceduralMusic(musicObject, request.moodEntry);
+      console.log('🎵 [generateMusicFromAPI] Procedural music generation completed:', proceduralResult ? 'SUCCESS' : 'FAILED');
+      return proceduralResult;
 
     } catch (error) {
       console.error('Music generation error:', error);
@@ -765,14 +844,30 @@ class MusicGenerationService {
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('🎵 Backend API Error:', response.status, errorData);
-        throw new Error(`Backend API failed: ${response.status} ${errorData.error || response.statusText}`);
+        let errorData = {};
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch (parseError) {
+          console.error('🎵 Failed to parse error response:', errorText);
+        }
+        
+        console.error('🎵 Backend API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          rawResponse: errorText?.substring(0, 500)
+        });
+        
+        throw new Error(`Backend API failed: ${response.status} ${(errorData as any).error || response.statusText}`);
       }
 
       const result = await response.json();
+      console.log('🎵 Backend API response:', { success: result.success, hasAudioData: !!result.audioData });
 
       if (!result.success) {
+        console.error('🎵 Backend returned unsuccessful result:', result);
         throw new Error(result.error || 'Music generation failed');
       }
 

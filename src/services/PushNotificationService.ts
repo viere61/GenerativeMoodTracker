@@ -191,16 +191,9 @@ export class PushNotificationService {
         return { success: false, error: 'Window start time is not far enough in the future' };
       }
 
-      // Cancel any existing mood reminder notifications FIRST
-      console.log('🔔 [scheduleWindowNotification] Cancelling existing notifications...');
-      await this.cancelAllMoodReminders();
-
-      // Double-check we cancelled everything
-      const remainingNotifications = await Notifications.getAllScheduledNotificationsAsync();
-      const remainingMoodReminders = remainingNotifications.filter(n => n.content.data?.type === 'mood_reminder');
-      if (remainingMoodReminders.length > 0) {
-        console.log('🔔 [scheduleWindowNotification] ⚠️ Warning: Still have remaining mood reminders:', remainingMoodReminders.length);
-      }
+      // Cancel ALL existing notifications FIRST (more aggressive)
+      console.log('🔔 [scheduleWindowNotification] Cancelling ALL existing notifications...');
+      await this.cancelAllNotifications();
 
       // Create the notification body
       const notificationBody = body || 
@@ -243,7 +236,7 @@ export class PushNotificationService {
     }
   }
 
-  /**
+    /**
    * Cancel all mood reminder notifications
    */
   async cancelAllMoodReminders(): Promise<void> {
@@ -252,11 +245,29 @@ export class PushNotificationService {
       
       console.log('🔔 [cancelAllMoodReminders] Total scheduled notifications:', scheduledNotifications.length);
       
+      // Log all notifications for debugging
+      scheduledNotifications.forEach((notification, index) => {
+        const data = notification.content.data as any;
+        const trigger = notification.trigger as any;
+        console.log(`🔔 [cancelAllMoodReminders] Notification ${index + 1}:`, {
+          id: notification.identifier,
+          title: notification.content.title,
+          type: data?.type,
+          scheduledFor: trigger?.date ? new Date(trigger.date).toLocaleString() : 'immediate',
+          windowStart: data?.windowStart ? new Date(data.windowStart).toLocaleString() : 'N/A'
+        });
+      });
+      
       const moodReminders = scheduledNotifications.filter(
         notification => notification.content.data?.type === 'mood_reminder'
       );
 
       console.log('🔔 [cancelAllMoodReminders] Mood reminder notifications to cancel:', moodReminders.length);
+
+      if (moodReminders.length === 0) {
+        console.log('🔔 [cancelAllMoodReminders] ⚠️ No mood reminders found to cancel');
+        return;
+      }
 
       for (const notification of moodReminders) {
         const triggerInfo = notification.trigger ? 
@@ -268,8 +279,29 @@ export class PushNotificationService {
         console.log(`🔔 [cancelAllMoodReminders] Cancelling: ${notification.identifier} (${triggerInfo})`);
         await Notifications.cancelScheduledNotificationAsync(notification.identifier);
       }
-
+      
       console.log(`🔔 [cancelAllMoodReminders] Successfully cancelled ${moodReminders.length} mood reminder notifications`);
+      
+      // Verify cancellation worked
+      const remainingNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      const remainingMoodReminders = remainingNotifications.filter(
+        notification => notification.content.data?.type === 'mood_reminder'
+      );
+      
+      if (remainingMoodReminders.length > 0) {
+        console.warn('🔔 [cancelAllMoodReminders] ⚠️ Warning: Still have remaining mood reminders after cancellation:', remainingMoodReminders.length);
+        remainingMoodReminders.forEach((notification, index) => {
+          const data = notification.content.data as any;
+          const trigger = notification.trigger as any;
+          console.log(`🔔 [cancelAllMoodReminders] Remaining ${index + 1}:`, {
+            id: notification.identifier,
+            scheduledFor: trigger?.date ? new Date(trigger.date).toLocaleString() : 'immediate',
+            windowStart: data?.windowStart ? new Date(data.windowStart).toLocaleString() : 'N/A'
+          });
+        });
+      } else {
+        console.log('🔔 [cancelAllMoodReminders] ✅ All mood reminders successfully cancelled');
+      }
     } catch (error) {
       console.error('❌ [cancelAllMoodReminders] Error cancelling mood reminders:', error);
     }
@@ -368,6 +400,37 @@ export class PushNotificationService {
   }
 
   /**
+   * Cancel ALL notifications (more aggressive than just mood reminders)
+   */
+  async cancelAllNotifications(): Promise<void> {
+    try {
+      console.log('🔔 [cancelAllNotifications] Cancelling ALL scheduled notifications...');
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      
+      // Verify cancellation
+      const remainingNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      console.log('🔔 [cancelAllNotifications] Remaining notifications after cancel all:', remainingNotifications.length);
+      
+      if (remainingNotifications.length > 0) {
+        console.warn('🔔 [cancelAllNotifications] ⚠️ Some notifications still remain after cancelAll');
+        remainingNotifications.forEach((notification, index) => {
+          const data = notification.content.data as any;
+          const trigger = notification.trigger as any;
+          console.log(`🔔 [cancelAllNotifications] Remaining ${index + 1}:`, {
+            id: notification.identifier,
+            type: data?.type,
+            scheduledFor: trigger?.date ? new Date(trigger.date).toLocaleString() : 'immediate'
+          });
+        });
+      } else {
+        console.log('🔔 [cancelAllNotifications] ✅ All notifications successfully cancelled');
+      }
+    } catch (error) {
+      console.error('❌ [cancelAllNotifications] Error cancelling all notifications:', error);
+    }
+  }
+
+  /**
    * Schedule notifications for multiple windows
    */
   async scheduleMultiDayNotifications(windows: any[]): Promise<{ 
@@ -383,9 +446,9 @@ export class PushNotificationService {
 
     console.log('🗓️ [scheduleMultiDayNotifications] Scheduling notifications for', windows.length, 'windows');
 
-    // Cancel all existing notifications ONCE at the beginning
-    console.log('🗓️ [scheduleMultiDayNotifications] Cancelling all existing notifications first...');
-    await this.cancelAllMoodReminders();
+    // Cancel ALL existing notifications ONCE at the beginning (more aggressive)
+    console.log('🗓️ [scheduleMultiDayNotifications] Cancelling ALL existing notifications first...');
+    await this.cancelAllNotifications();
 
     for (const window of windows) {
       try {

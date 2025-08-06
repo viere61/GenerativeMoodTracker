@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import MoodEntryService from '../services/MoodEntryService';
 import MoodEntryList from '../components/MoodEntryList';
 import MoodTrendCharts from '../components/MoodTrendCharts';
@@ -33,14 +34,37 @@ const HistoryScreen = () => {
     loadMoodEntries();
   }, []);
 
-  // Set up periodic refresh to catch music generation updates
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
+  // Refresh when user navigates back to this screen (e.g., after adding a mood entry)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📱 [HistoryScreen] Screen focused, refreshing entries');
       loadMoodEntries();
-    }, 5000); // Refresh every 5 seconds
+    }, [])
+  );
 
-    return () => clearInterval(refreshInterval);
-  }, []);
+  // Smart refresh system: only refresh once when there are entries with pending music generation
+  useEffect(() => {
+    // Check if there are any recent entries (within last 2 minutes) with music generation in progress
+    const now = Date.now();
+    const twoMinutesAgo = now - (2 * 60 * 1000);
+    
+    const hasRecentGeneratingEntries = moodEntries.some(entry => 
+      entry.timestamp > twoMinutesAgo && // Recent entry
+      !entry.musicGenerated && // Music not generated yet
+      entry.musicId === undefined // No music ID assigned
+    );
+    
+    if (hasRecentGeneratingEntries) {
+      // Set up a single delayed refresh to catch music generation completion
+      // Music generation typically takes 10-30 seconds, so we refresh once after 45 seconds
+      const refreshTimer = setTimeout(() => {
+        console.log('📱 [HistoryScreen] Single refresh to check for music generation completion');
+        loadMoodEntries();
+      }, 45000); // Single refresh after 45 seconds
+
+      return () => clearTimeout(refreshTimer);
+    }
+  }, [moodEntries]);
 
   // Load mood entries from the service
   const loadMoodEntries = async () => {
@@ -305,6 +329,28 @@ const HistoryScreen = () => {
         </View>
       </View>
       
+      {/* Show info when music generation might be in progress */}
+      {(() => {
+        const now = Date.now();
+        const twoMinutesAgo = now - (2 * 60 * 1000);
+        const hasRecentGeneratingEntries = moodEntries.some(entry => 
+          entry.timestamp > twoMinutesAgo && 
+          !entry.musicGenerated && 
+          entry.musicId === undefined
+        );
+        
+        if (hasRecentGeneratingEntries) {
+          return (
+            <View style={styles.musicGenerationInfo}>
+              <Text style={styles.musicGenerationText}>
+                🎵 Music generation in progress... Use the refresh button to check for updates
+              </Text>
+            </View>
+          );
+        }
+        return null;
+      })()}
+      
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'list' && styles.activeTabButton]}
@@ -512,6 +558,19 @@ const styles = StyleSheet.create({
   buttonText: {
     fontWeight: 'bold',
     color: 'white',
+  },
+  musicGenerationInfo: {
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    marginVertical: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+  },
+  musicGenerationText: {
+    fontSize: 14,
+    color: '#1565C0',
+    textAlign: 'center',
   },
 });
 

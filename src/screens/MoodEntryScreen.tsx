@@ -94,6 +94,16 @@ const MoodEntryScreen = () => {
         reflection
       );
       
+      // Mark mood as logged in TimeWindowService
+      try {
+        const TimeWindowService = (await import('../services/TimeWindowService')).default;
+        await TimeWindowService.markMoodLogged(user.userId);
+        console.log('✅ [MoodEntryScreen] Marked mood as logged in TimeWindowService');
+      } catch (error) {
+        console.error('❌ [MoodEntryScreen] Error marking mood as logged:', error);
+        // Don't fail the mood save if this fails
+      }
+      
       // Show success message
       Alert.alert(
         "Success",

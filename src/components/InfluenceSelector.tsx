@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 
 interface InfluenceSelectorProps {
   selectedInfluences: string[];
@@ -79,6 +79,9 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.influencesContainer}
+        nestedScrollEnabled={true}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={true}
       >
         {availableInfluences.map((influence) => (
           <TouchableOpacity
@@ -140,12 +143,16 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     maxHeight: 200,
+    flexGrow: 0, // Prevent the ScrollView from expanding beyond maxHeight
   },
   influencesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    gap: 8,
+    paddingBottom: 10, // Add padding for better scrolling on Android
+    ...(Platform.OS === 'android' && {
+      paddingVertical: 5,
+    }),
   },
   influenceButton: {
     flexDirection: 'row',
@@ -157,6 +164,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     marginBottom: 8,
+    marginRight: 8, // Add horizontal margin to prevent overlap
+    minHeight: 36, // Ensure consistent height for touch targets
   },
   selectedInfluenceButton: {
     backgroundColor: '#4CAF50',

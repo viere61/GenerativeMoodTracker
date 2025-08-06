@@ -87,14 +87,28 @@ class TimeWindowService {
    * Get current daily window (create if needed)
    */
   async getCurrentWindow(userId: string): Promise<DailyWindow> {
-    const existingWindow = await this.getDailyWindow(userId);
     const today = new Date().toISOString().split('T')[0];
     
-    // If no window exists or it's from a previous day, create a new one
+    // First check the generic daily window key
+    let existingWindow = await this.getDailyWindow(userId);
+    
+    // If not found or outdated, check the date-specific key for today
+    if (!existingWindow || existingWindow.date !== today) {
+      console.log('Checking date-specific key for today\'s window...');
+      existingWindow = await this.getDailyWindowForDate(userId, today);
+    }
+    
+    // If still no window exists or it's from a previous day, create a new one
     if (!existingWindow || existingWindow.date !== today) {
       console.log('Creating new window (no existing or outdated)');
       return await this.createNewWindow(userId);
     }
+    
+    console.log('Found existing window for today:', {
+      date: existingWindow.date,
+      windowStart: new Date(existingWindow.windowStart).toLocaleString(),
+      windowEnd: new Date(existingWindow.windowEnd).toLocaleString()
+    });
     
     return existingWindow;
   }
@@ -104,6 +118,9 @@ class TimeWindowService {
    */
   async resetWindow(userId: string): Promise<DailyWindow> {
     console.log('Resetting window for user:', userId);
+    
+    // Clear all future date-specific windows first to ensure fresh generation
+    await this.clearAllFutureDateSpecificWindows(userId);
     
     // Create new window using the main function
     const newWindow = await this.createNewWindow(userId);
@@ -115,6 +132,38 @@ class TimeWindowService {
     console.log('✅ Reset window saved with both key formats for consistency');
     
     return newWindow;
+  }
+
+  /**
+   * Clear all future date-specific windows to force fresh generation
+   */
+  private async clearAllFutureDateSpecificWindows(userId: string): Promise<void> {
+    try {
+      console.log('🧹 [clearAllFutureDateSpecificWindows] Clearing all future date-specific windows...');
+      
+      // Clear windows for the next 30 days to be thorough
+      const today = new Date();
+      let clearedCount = 0;
+      
+      for (let i = 0; i <= 30; i++) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + i);
+        const dateString = targetDate.toISOString().split('T')[0];
+        
+        // Check if window exists for this date
+        const existingWindow = await this.getDailyWindowForDate(userId, dateString);
+        if (existingWindow) {
+          await this.deleteDailyWindowForDate(userId, dateString);
+          clearedCount++;
+          console.log(`🧹 [clearAllFutureDateSpecificWindows] Cleared window for ${dateString}: ${new Date(existingWindow.windowStart).toLocaleString()}`);
+        }
+      }
+      
+      console.log(`🧹 [clearAllFutureDateSpecificWindows] Cleared ${clearedCount} date-specific windows`);
+    } catch (error) {
+      console.error('❌ [clearAllFutureDateSpecificWindows] Error clearing future windows:', error);
+      // Don't throw - this is cleanup, shouldn't fail the reset
+    }
   }
   
   /**
@@ -265,7 +314,7 @@ class TimeWindowService {
   /**
    * Create windows for multiple days ahead and schedule notifications
    */
-  async createMultiDayWindows(userId: string, daysAhead: number = 3): Promise<DailyWindow[]> {
+  async createMultiDayWindows(userId: string, daysAhead: number = 7): Promise<DailyWindow[]> {
     try {
       // Get user preferences
       const preferences = await UserPreferencesService.getPreferences(userId);
@@ -341,12 +390,53 @@ class TimeWindowService {
           windowStart: new Date(windowStart).toLocaleString(),
           windowEnd: new Date(windowEnd).toLocaleString()
         });
+        
+        // Verify it was saved correctly
+        const savedWindow = await this.getDailyWindowForDate(userId, dateString);
+        console.log('📅 Verification - saved window for', dateString, ':', savedWindow ? {
+          windowStart: new Date(savedWindow.windowStart).toLocaleString(),
+          windowEnd: new Date(savedWindow.windowEnd).toLocaleString()
+        } : 'FAILED TO SAVE');
       }
 
       return windows;
     } catch (error) {
       console.error('Error creating multi-day windows:', error);
       throw new Error('Failed to create multi-day windows');
+    }
+  }
+
+  /**
+   * Get the next window after today (for when user has already logged today)
+   */
+  async getNextWindowAfterToday(userId: string): Promise<DailyWindow | null> {
+    try {
+      console.log('🔍 [getNextWindowAfterToday] Looking for tomorrow\'s window or later...');
+
+      // Look for the next available window starting from tomorrow
+      for (let i = 1; i <= 7; i++) {
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + i);
+        const dateString = targetDate.toISOString().split('T')[0];
+        
+        const window = await this.getDailyWindowForDate(userId, dateString);
+        console.log(`🔍 [getNextWindowAfterToday] ${dateString} window:`, window ? {
+          windowStart: new Date(window.windowStart).toLocaleString(),
+          windowEnd: new Date(window.windowEnd).toLocaleString(),
+          hasLogged: window.hasLogged
+        } : 'none');
+        
+        if (window && !window.hasLogged) {
+          console.log(`🔍 [getNextWindowAfterToday] ✅ Returning ${dateString} window`);
+          return window;
+        }
+      }
+
+      console.log('🔍 [getNextWindowAfterToday] ❌ No available windows found');
+      return null;
+    } catch (error) {
+      console.error('Error getting next window after today:', error);
+      return null;
     }
   }
 
@@ -358,9 +448,21 @@ class TimeWindowService {
       const today = new Date().toISOString().split('T')[0];
       const now = Date.now();
 
-      // Check if today's window is still available
+      console.log('🔍 [getNextAvailableWindow] Looking for next available window...');
+
+      // Check if today's window is still available (not logged AND window is still open)
       const todayWindow = await this.getDailyWindowForDate(userId, today);
+      console.log('🔍 [getNextAvailableWindow] Today\'s window:', todayWindow ? {
+        date: todayWindow.date,
+        windowStart: new Date(todayWindow.windowStart).toLocaleString(),
+        windowEnd: new Date(todayWindow.windowEnd).toLocaleString(),
+        hasLogged: todayWindow.hasLogged,
+        isStillOpen: now <= todayWindow.windowEnd
+      } : 'none');
+      
+      // Only return today's window if user hasn't logged AND the window is still open
       if (todayWindow && !todayWindow.hasLogged && now <= todayWindow.windowEnd) {
+        console.log('🔍 [getNextAvailableWindow] ✅ Returning today\'s window');
         return todayWindow;
       }
 
@@ -371,11 +473,19 @@ class TimeWindowService {
         const dateString = targetDate.toISOString().split('T')[0];
         
         const window = await this.getDailyWindowForDate(userId, dateString);
+        console.log(`🔍 [getNextAvailableWindow] ${dateString} window:`, window ? {
+          windowStart: new Date(window.windowStart).toLocaleString(),
+          windowEnd: new Date(window.windowEnd).toLocaleString(),
+          hasLogged: window.hasLogged
+        } : 'none');
+        
         if (window && !window.hasLogged) {
+          console.log(`🔍 [getNextAvailableWindow] ✅ Returning ${dateString} window`);
           return window;
         }
       }
 
+      console.log('🔍 [getNextAvailableWindow] ❌ No available windows found');
       return null;
     } catch (error) {
       console.error('Error getting next available window:', error);

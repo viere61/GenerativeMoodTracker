@@ -33,7 +33,7 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
     emotionFrequency: {},
   });
 
-  const screenWidth = Dimensions.get('window').width - 40; // Accounting for padding
+  const screenWidth = Dimensions.get('window').width - 60; // More conservative padding for mobile
 
   // Process data when entries or time range changes
   useEffect(() => {
@@ -170,33 +170,37 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
     
     if (chartType === 'line') {
       return (
-        <LineChart
-          data={filteredData}
-          width={screenWidth}
-          height={220}
-          chartConfig={chartConfig}
-          bezier
-          style={styles.chart}
-          fromZero
-          yAxisSuffix=""
-          yAxisLabel=""
-          yAxisInterval={1}
-          segments={5}
-        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <LineChart
+            data={filteredData}
+            width={Math.max(screenWidth, filteredData.labels.length * 50)} // Ensure minimum width per data point
+            height={220}
+            chartConfig={chartConfig}
+            bezier
+            style={styles.chart}
+            fromZero
+            yAxisSuffix=""
+            yAxisLabel=""
+            yAxisInterval={1}
+            segments={5}
+          />
+        </ScrollView>
       );
     } else {
       return (
-        <BarChart
-          data={filteredData}
-          width={screenWidth}
-          height={220}
-          chartConfig={chartConfig}
-          style={styles.chart}
-          fromZero
-          yAxisSuffix=""
-          yAxisLabel=""
-          showBarTops={false}
-        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <BarChart
+            data={filteredData}
+            width={Math.max(screenWidth, filteredData.labels.length * 50)} // Ensure minimum width per data point
+            height={220}
+            chartConfig={chartConfig}
+            style={styles.chart}
+            fromZero
+            yAxisSuffix=""
+            yAxisLabel=""
+            showBarTops={false}
+          />
+        </ScrollView>
       );
     }
   };
@@ -235,17 +239,19 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
     };
     
     return (
-      <BarChart
-        data={emotionData}
-        width={screenWidth}
-        height={220}
-        chartConfig={chartConfig}
-        style={styles.chart}
-        fromZero
-        yAxisSuffix=""
-        yAxisLabel=""
-        showBarTops={false}
-      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <BarChart
+          data={emotionData}
+          width={Math.max(screenWidth, topEmotions.length * 80)} // Ensure minimum width per emotion
+          height={220}
+          chartConfig={chartConfig}
+          style={styles.chart}
+          fromZero
+          yAxisSuffix=""
+          yAxisLabel=""
+          showBarTops={false}
+        />
+      </ScrollView>
     );
   };
 

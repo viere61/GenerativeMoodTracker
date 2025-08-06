@@ -71,7 +71,35 @@ class MoodEntryService {
       }
       
       // Trigger music generation asynchronously
-      this.triggerMusicGeneration(userId, newEntry);
+      console.log('🎵 [saveMoodEntry] About to trigger music generation for entry:', newEntry.entryId);
+      this.triggerMusicGeneration(userId, newEntry).catch(error => {
+        console.error('🎵 [saveMoodEntry] Music generation failed:', error);
+      });
+      
+      // Ensure 7 days of windows ahead exist after successful mood save
+      try {
+        const TimeWindowService = (await import('./TimeWindowService')).default;
+        const PushNotificationService = (await import('./PushNotificationService')).default;
+        
+        console.log('🔄 [MoodEntryService] Ensuring 7 days of windows ahead after mood save...');
+        
+        // Create multi-day windows
+        const windows = await TimeWindowService.createMultiDayWindows(userId, 7);
+        console.log('🔄 [MoodEntryService] Created', windows.length, 'windows ahead');
+        
+        // Schedule notifications for the new windows
+        const pushNotificationService = PushNotificationService.getInstance();
+        const notificationResult = await pushNotificationService.scheduleMultiDayNotifications(windows);
+        
+        if (notificationResult.success) {
+          console.log('✅ [MoodEntryService] Successfully scheduled', notificationResult.scheduledCount, 'notifications for future windows');
+        } else {
+          console.warn('⚠️ [MoodEntryService] Some notifications failed to schedule:', notificationResult.errors);
+        }
+      } catch (error) {
+        console.error('❌ [MoodEntryService] Error ensuring multi-day windows after mood save:', error);
+        // Don't throw error - mood save was successful, this is just a maintenance task
+      }
       
       return newEntry;
     } catch (error) {
@@ -188,6 +216,9 @@ class MoodEntryService {
   private async triggerMusicGeneration(userId: string, moodEntry: MoodEntry): Promise<void> {
     try {
       console.log('Triggering music generation for mood entry:', moodEntry.entryId);
+      
+      // Run diagnostics to check configuration
+      await MusicGenerationService.diagnoseConfiguration();
       
       // Initialize music generation service
       await MusicGenerationService.initialize();

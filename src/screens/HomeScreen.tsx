@@ -97,15 +97,15 @@ const HomeScreen = () => {
       setStartTime(newStartTime);
       setEndTime(newEndTime);
 
-      // Cancel any existing notifications
-      await pushNotificationService.cancelAllMoodReminders();
+      // Cancel ALL existing notifications (more aggressive)
+      await pushNotificationService.cancelAllNotifications();
       
-      // Reset time window for today
+      // Reset time window for today (this will also clear all future date-specific windows)
       const newWindow = await TimeWindowService.resetWindow(userId);
       console.log('✅ Updated today\'s window with new time range');
 
-      // Create multi-day windows with new time range (3 days including today)
-      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 3);
+      // Create multi-day windows with new time range (7 days including today)
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 7);
       console.log('✅ Created', multiDayWindows.length, 'multi-day windows with new time range');
 
       // Schedule notifications for all future windows
@@ -134,9 +134,23 @@ const HomeScreen = () => {
       const userId = 'demo-user';
       const result = await TimeWindowService.canLogMood(userId);
       
-      // If current window has passed, get the next available window for display
+      // If user has already logged today, show that message and tomorrow's window time
+      if (result.window.hasLogged) {
+        // Get tomorrow's window (or later) since user has already logged today
+        const nextWindow = await TimeWindowService.getNextWindowAfterToday(userId);
+        
+        setTimeWindowStatus({
+          canLog: false,
+          message: result.message,
+          windowStart: nextWindow?.windowStart,
+          windowEnd: nextWindow?.windowEnd,
+        });
+        return;
+      }
+      
+      // If current window has passed AND user hasn't logged, get the next available window for display
       let displayWindow = result.window;
-      if (!result.canLog && Date.now() > result.window.windowEnd) {
+      if (!result.canLog && !result.window.hasLogged && Date.now() > result.window.windowEnd) {
         const nextWindow = await TimeWindowService.getNextAvailableWindow(userId);
         if (nextWindow) {
           displayWindow = nextWindow;
@@ -199,15 +213,15 @@ const HomeScreen = () => {
       setLoading(true);
       console.log('🏠 [handleResetTimeWindow] Starting time window reset with multi-day scheduling...');
       
-      // Cancel any existing notifications
-      await pushNotificationService.cancelAllMoodReminders();
+      // Cancel ALL existing notifications (more aggressive)
+      await pushNotificationService.cancelAllNotifications();
       
       // Reset the time window (creates today's window)
       const newWindow = await TimeWindowService.resetWindow(userId);
       console.log('🏠 [handleResetTimeWindow] ✅ Reset today\'s window');
 
-      // Create multi-day windows (3 days including today)
-      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 3);
+      // Create multi-day windows (7 days including today)
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 7);
       console.log('🏠 [handleResetTimeWindow] ✅ Created', multiDayWindows.length, 'multi-day windows');
 
       // Log today's window details to verify it's correct
@@ -230,7 +244,12 @@ const HomeScreen = () => {
         console.log('🏠 [handleResetTimeWindow] ⚠️ Some notifications failed to schedule:', scheduleResult.errors);
       }
 
+      // Add a small delay to ensure all storage operations are complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       await checkTimeWindow();
+      
+      console.log('🏠 [handleResetTimeWindow] ✅ UI refreshed with new window data');
     } catch (error) {
       console.error('Error resetting time window:', error);
     } finally {
@@ -399,15 +418,15 @@ const HomeScreen = () => {
             />
           )}
 
-                      {/* Show next window info when current window has passed */}
-            {timeWindowStatus.windowStart && timeWindowStatus.windowEnd && Date.now() > timeWindowStatus.windowEnd && (
-              <View style={styles.nextWindowInfo}>
-                <Text style={styles.nextWindowText}>
-                  Next window opens at {new Date(timeWindowStatus.windowStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  {new Date(timeWindowStatus.windowStart).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
-                </Text>
-              </View>
-            )}
+          {/* Show next window info when we have window data (either current window passed OR user already logged) */}
+          {timeWindowStatus.windowStart && timeWindowStatus.windowEnd && (
+            <View style={styles.nextWindowInfo}>
+              <Text style={styles.nextWindowText}>
+                Next window opens at {new Date(timeWindowStatus.windowStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                {new Date(timeWindowStatus.windowStart).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
+              </Text>
+            </View>
+          )}
         </View>
       )}
 

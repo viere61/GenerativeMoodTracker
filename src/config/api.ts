@@ -43,7 +43,7 @@ export const API_CONFIG = {
   APP: {
     MUSIC_GENERATION_ENABLED: true,
     FALLBACK_MUSIC_ENABLED: true,
-    DEBUG_MODE: __DEV__, // Enable debug logging in development
+    DEBUG_MODE: true, // Force enable debug logging to troubleshoot music generation
   }
 };
 
