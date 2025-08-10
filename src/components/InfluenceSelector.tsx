@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput } from 'react-native';
+import UserPreferencesService from '../services/UserPreferencesService';
 
 interface InfluenceSelectorProps {
   selectedInfluences: string[];
@@ -17,7 +18,7 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
   onValidationChange,
 }) => {
   // Predefined influence categories
-  const availableInfluences = [
+  const defaultInfluences = [
     // Relationships
     { id: 'family', label: 'Family', emoji: '👨‍👩‍👧‍👦' },
     { id: 'friends', label: 'Friends', emoji: '👥' },
@@ -49,6 +50,22 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
     { id: 'music', label: 'Music', emoji: '🎵' },
   ];
 
+  const [customInfluences, setCustomInfluences] = useState<string[]>([]);
+  const [newInfluence, setNewInfluence] = useState('');
+  const userId = 'demo-user';
+
+  useEffect(() => {
+    (async () => {
+      const saved = await UserPreferencesService.getCustomInfluenceTags(userId);
+      setCustomInfluences(saved);
+    })();
+  }, []);
+
+  const availableInfluences = [
+    ...defaultInfluences,
+    ...customInfluences.map(label => ({ id: label.toLowerCase().replace(/\s+/g, '-'), label, emoji: '📝' }))
+  ];
+
   // Handle influence selection/deselection
   const handleInfluenceToggle = (influenceId: string) => {
     const newInfluences = selectedInfluences.includes(influenceId)
@@ -56,6 +73,29 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
       : [...selectedInfluences, influenceId];
     
     onInfluencesChange(newInfluences);
+  };
+
+  const addCustomInfluence = async () => {
+    const trimmed = newInfluence.trim();
+    if (!trimmed) return;
+    const updated = await UserPreferencesService.addCustomInfluenceTag(userId, trimmed);
+    setCustomInfluences(updated);
+    setNewInfluence('');
+    const newId = trimmed.toLowerCase().replace(/\s+/g, '-');
+    if (!selectedInfluences.includes(newId)) {
+      onInfluencesChange([...selectedInfluences, newId]);
+    }
+  };
+
+  const removeCustomInfluence = async (label: string) => {
+    const prefs = await UserPreferencesService.getPreferences(userId);
+    const updated = (prefs?.customInfluenceTags || []).filter(t => t.toLowerCase() !== label.toLowerCase());
+    await UserPreferencesService.savePreferences(userId, { ...(prefs || UserPreferencesService.getDefaultPreferences()), customInfluenceTags: updated });
+    setCustomInfluences(updated);
+    const id = label.toLowerCase().replace(/\s+/g, '-');
+    if (selectedInfluences.includes(id)) {
+      onInfluencesChange(selectedInfluences.filter(i => i !== id));
+    }
   };
 
   // Notify parent component about validation state
@@ -78,11 +118,29 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.influencesContainer}
+        contentContainerStyle={styles.content}
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
       >
+        <View style={styles.addRow}>
+          <TextInput
+            style={[styles.input, { color: '#000' }]}
+            placeholder="Add your own influence"
+            placeholderTextColor="#999"
+            selectionColor="#4CAF50"
+            value={newInfluence}
+            onChangeText={setNewInfluence}
+            onSubmitEditing={addCustomInfluence}
+            returnKeyType="done"
+          />
+          <TouchableOpacity style={styles.addButton} onPress={addCustomInfluence}>
+            <Text style={styles.addButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.influencesContainer}>
         {availableInfluences.map((influence) => (
           <TouchableOpacity
             key={influence.id}
@@ -103,8 +161,19 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
             ]}>
               {influence.label}
             </Text>
+            {influence.emoji === '📝' && (
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={(e) => { e.stopPropagation?.(); removeCustomInfluence(influence.label); }}
+                accessibilityLabel={`Remove custom influence ${influence.label}`}
+                accessibilityRole="button"
+              >
+                <Text style={styles.removeText}>×</Text>
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         ))}
+        </View>
       </ScrollView>
       
       {selectedInfluences.length === 0 && (
@@ -145,6 +214,9 @@ const styles = StyleSheet.create({
     maxHeight: 200,
     flexGrow: 0, // Prevent the ScrollView from expanding beyond maxHeight
   },
+  content: {
+    paddingBottom: 10,
+  },
   influencesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -153,6 +225,33 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'android' && {
       paddingVertical: 5,
     }),
+  },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    width: '100%',
+    flexBasis: '100%',
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: '#fff',
+  },
+  addButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  addButtonText: {
+    color: 'white',
+    fontWeight: '600',
   },
   influenceButton: {
     flexDirection: 'row',
@@ -183,6 +282,20 @@ const styles = StyleSheet.create({
   selectedInfluenceText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  removeBtn: {
+    marginLeft: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#eee',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeText: {
+    color: '#555',
+    fontSize: 14,
+    lineHeight: 14,
   },
   validationMessage: {
     color: '#E53935',

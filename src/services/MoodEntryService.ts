@@ -38,9 +38,13 @@ class MoodEntryService {
         // Continue without encryption if initialization fails
       }
     }
-    // Validate inputs
-    if (moodRating < 1 || moodRating > 10) {
-      throw new Error('Mood rating must be between 1 and 10');
+    // Normalize mood rating: accept continuous input (1..100) and map to 1..10
+    let normalizedRating = moodRating;
+    if (moodRating > 10) {
+      const capped = Math.min(Math.max(moodRating, 1), 100);
+      normalizedRating = Math.round(1 + ((capped - 1) / 99) * 9);
+    } else if (moodRating < 1) {
+      normalizedRating = 1;
     }
     
     // Create new mood entry
@@ -48,7 +52,7 @@ class MoodEntryService {
       entryId: generateUUID(),
       userId,
       timestamp: Date.now(),
-      moodRating,
+      moodRating: normalizedRating,
       emotionTags,
       influences,
       reflection,

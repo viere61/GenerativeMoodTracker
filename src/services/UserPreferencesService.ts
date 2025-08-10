@@ -16,6 +16,8 @@ export interface UserPreferences {
   notifications: boolean;
   theme: string;
   audioQuality: string;
+  customEmotionTags?: string[];
+  customInfluenceTags?: string[];
   [key: string]: any; // Allow for additional preferences
 }
 
@@ -108,6 +110,8 @@ class UserPreferencesService {
       notifications: true,
       theme: 'light',
       audioQuality: 'high',
+      customEmotionTags: [],
+      customInfluenceTags: [],
     };
   }
   
@@ -125,6 +129,54 @@ class UserPreferencesService {
     
     await this.savePreferences(userId, preferences);
     return preferences;
+  }
+
+  /**
+   * Get custom emotion tags
+   */
+  async getCustomEmotionTags(userId: string): Promise<string[]> {
+    const prefs = await this.getPreferences(userId);
+    return prefs?.customEmotionTags || [];
+  }
+
+  /**
+   * Add a custom emotion tag (deduplicated, case-insensitive)
+   */
+  async addCustomEmotionTag(userId: string, tag: string): Promise<string[]> {
+    const trimmed = tag.trim();
+    if (!trimmed) return await this.getCustomEmotionTags(userId);
+    const prefs = (await this.getPreferences(userId)) || this.getDefaultPreferences();
+    const existing = new Set((prefs.customEmotionTags || []).map(t => t.toLowerCase()));
+    if (!existing.has(trimmed.toLowerCase())) {
+      const updated = [...(prefs.customEmotionTags || []), trimmed];
+      await this.savePreferences(userId, { ...prefs, customEmotionTags: updated });
+      return updated;
+    }
+    return prefs.customEmotionTags || [];
+  }
+
+  /**
+   * Get custom influence tags
+   */
+  async getCustomInfluenceTags(userId: string): Promise<string[]> {
+    const prefs = await this.getPreferences(userId);
+    return prefs?.customInfluenceTags || [];
+  }
+
+  /**
+   * Add a custom influence tag (deduplicated, case-insensitive)
+   */
+  async addCustomInfluenceTag(userId: string, tag: string): Promise<string[]> {
+    const trimmed = tag.trim();
+    if (!trimmed) return await this.getCustomInfluenceTags(userId);
+    const prefs = (await this.getPreferences(userId)) || this.getDefaultPreferences();
+    const existing = new Set((prefs.customInfluenceTags || []).map(t => t.toLowerCase()));
+    if (!existing.has(trimmed.toLowerCase())) {
+      const updated = [...(prefs.customInfluenceTags || []), trimmed];
+      await this.savePreferences(userId, { ...prefs, customInfluenceTags: updated });
+      return updated;
+    }
+    return prefs.customInfluenceTags || [];
   }
   
   /**

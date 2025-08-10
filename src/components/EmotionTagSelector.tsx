@@ -5,8 +5,10 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView,
-  AccessibilityInfo
+  AccessibilityInfo,
+  TextInput
 } from 'react-native';
+import UserPreferencesService from '../services/UserPreferencesService';
 
 interface EmotionTagSelectorProps {
   selectedTags: string[];
@@ -34,6 +36,9 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
 }) => {
   // Track if screen reader is enabled for enhanced accessibility
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState('');
+  const userId = 'demo-user';
   
   // Check if screen reader is enabled
   useEffect(() => {
@@ -54,6 +59,14 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
       // Clean up subscription
       subscription.remove();
     };
+  }, []);
+
+  // Load custom emotion tags
+  useEffect(() => {
+    (async () => {
+      const saved = await UserPreferencesService.getCustomEmotionTags(userId);
+      setCustomTags(saved);
+    })();
   }, []);
 
   // Notify parent component about validation state when selected tags change
@@ -87,17 +100,40 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
   };
 
   // Group tags by emotional valence for better organization
-  const positiveEmotions = availableTags.filter(tag => 
+  const allAvailable = Array.from(new Set([...(availableTags || []), ...customTags]));
+
+  const positiveEmotions = allAvailable.filter(tag => 
     ['Happy', 'Excited', 'Grateful', 'Relaxed', 'Content', 'Calm', 'Hopeful', 'Motivated', 'Proud', 'Confident'].includes(tag)
   );
   
-  const negativeEmotions = availableTags.filter(tag => 
+  const negativeEmotions = allAvailable.filter(tag => 
     ['Tired', 'Bored', 'Sad', 'Anxious', 'Stressed', 'Angry', 'Frustrated', 'Overwhelmed'].includes(tag)
   );
   
-  const otherEmotions = availableTags.filter(tag => 
+  const otherEmotions = allAvailable.filter(tag => 
     !positiveEmotions.includes(tag) && !negativeEmotions.includes(tag)
   );
+
+  const addCustomTag = async () => {
+    const trimmed = newTag.trim();
+    if (!trimmed) return;
+    const updated = await UserPreferencesService.addCustomEmotionTag(userId, trimmed);
+    setCustomTags(updated);
+    setNewTag('');
+    if (!selectedTags.includes(trimmed)) {
+      onChange([...selectedTags, trimmed]);
+    }
+  };
+
+  const removeCustomTag = async (tag: string) => {
+    const prefs = await UserPreferencesService.getPreferences(userId);
+    const updated = (prefs?.customEmotionTags || []).filter(t => t.toLowerCase() !== tag.toLowerCase());
+    await UserPreferencesService.savePreferences(userId, { ...(prefs || UserPreferencesService.getDefaultPreferences()), customEmotionTags: updated });
+    setCustomTags(updated);
+    if (selectedTags.includes(tag)) {
+      onChange(selectedTags.filter(t => t !== tag));
+    }
+  };
 
   return (
     <View 
@@ -110,6 +146,20 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
       <Text style={styles.subtitle}>Select all emotions that apply</Text>
       
       <ScrollView style={styles.tagsScrollView} contentContainerStyle={styles.tagsContainer}>
+        {/* Add custom emotion tag */}
+        <View style={styles.addRow}>
+          <TextInput
+            style={styles.input}
+            placeholder="Add your own emotion"
+            value={newTag}
+            onChangeText={setNewTag}
+            onSubmitEditing={addCustomTag}
+            returnKeyType="done"
+          />
+          <TouchableOpacity style={styles.addButton} onPress={addCustomTag}>
+            <Text style={styles.addButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
         {positiveEmotions.length > 0 && (
           <View style={styles.tagSection}>
             <Text style={styles.sectionTitle}>Positive</Text>
@@ -135,6 +185,11 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
                   >
                     {tag}
                   </Text>
+                  {customTags.includes(tag) && (
+                    <TouchableOpacity style={styles.removeBtn} onPress={() => removeCustomTag(tag)}>
+                      <Text style={styles.removeText}>×</Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -166,6 +221,11 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
                   >
                     {tag}
                   </Text>
+                  {customTags.includes(tag) && (
+                    <TouchableOpacity style={styles.removeBtn} onPress={() => removeCustomTag(tag)}>
+                      <Text style={styles.removeText}>×</Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -197,6 +257,11 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
                   >
                     {tag}
                   </Text>
+                  {customTags.includes(tag) && (
+                    <TouchableOpacity style={styles.removeBtn} onPress={() => removeCustomTag(tag)}>
+                      <Text style={styles.removeText}>×</Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -246,6 +311,32 @@ const styles = StyleSheet.create({
   tagsScrollView: {
     maxHeight: 300,
   },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: '#fff',
+  },
+  addButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  addButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
   tagsContainer: {
     paddingBottom: 10,
   },
@@ -282,6 +373,20 @@ const styles = StyleSheet.create({
   selectedTagText: {
     color: 'white',
     fontWeight: '500',
+  },
+  removeBtn: {
+    marginLeft: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#eee',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeText: {
+    color: '#666',
+    fontSize: 14,
+    lineHeight: 14,
   },
   selectedTagsContainer: {
     marginTop: 15,

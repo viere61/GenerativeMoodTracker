@@ -52,10 +52,11 @@ class TimeWindowService {
    */
   async createNewWindow(userId: string): Promise<DailyWindow> {
     try {
-      // Get user preferences
-      const preferences = await UserPreferencesService.getPreferences(userId);
+      // Get user preferences; initialize defaults if missing (fresh install)
+      let preferences = await UserPreferencesService.getPreferences(userId);
       if (!preferences) {
-        throw new Error('User preferences not found');
+        console.log('🛠️ [TimeWindowService] Preferences not found. Initializing defaults...');
+        preferences = await UserPreferencesService.initializePreferences(userId);
       }
       
       const { start, end } = preferences.preferredTimeRange;
@@ -316,10 +317,11 @@ class TimeWindowService {
    */
   async createMultiDayWindows(userId: string, daysAhead: number = 7): Promise<DailyWindow[]> {
     try {
-      // Get user preferences
-      const preferences = await UserPreferencesService.getPreferences(userId);
+      // Get user preferences; initialize defaults if missing
+      let preferences = await UserPreferencesService.getPreferences(userId);
       if (!preferences) {
-        throw new Error('User preferences not found');
+        console.log('🛠️ [TimeWindowService] Preferences not found for multi-day windows. Initializing defaults...');
+        preferences = await UserPreferencesService.initializePreferences(userId);
       }
 
       const { start, end } = preferences.preferredTimeRange;
@@ -534,10 +536,11 @@ class TimeWindowService {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowDateString = tomorrow.toISOString().split('T')[0];
       
-      // Get user preferences first
-      const preferences = await UserPreferencesService.getPreferences(userId);
+      // Get user preferences first; initialize defaults if missing
+      let preferences = await UserPreferencesService.getPreferences(userId);
       if (!preferences) {
-        throw new Error('User preferences not found');
+        console.log('🛠️ [TimeWindowService] Preferences not found for ensureTomorrowWindowExists. Initializing defaults...');
+        preferences = await UserPreferencesService.initializePreferences(userId);
       }
 
       const { start, end } = preferences.preferredTimeRange;

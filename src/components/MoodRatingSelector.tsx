@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Vibration, AccessibilityInfo } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, AccessibilityInfo } from 'react-native';
 
 interface MoodRatingSelectorProps {
   value: number | null;
   onChange: (rating: number) => void;
-  minRating?: number;
-  maxRating?: number;
   onValidationChange?: (isValid: boolean) => void;
 }
 
@@ -17,8 +15,6 @@ interface MoodRatingSelectorProps {
 const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   value,
   onChange,
-  minRating = 1,
-  maxRating = 10,
   onValidationChange,
 }) => {
   // Animation value for the selection indicator
@@ -26,11 +22,16 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   // Track if screen reader is enabled for enhanced accessibility
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   
-  // Generate array of ratings from min to max
-  const ratings = Array.from(
-    { length: maxRating - minRating + 1 },
-    (_, i) => i + minRating
-  );
+  // Continuous slider scale mapped to 1-7 descriptive anchors
+  const anchors = [
+    'Very unpleasant',
+    'Unpleasant',
+    'Slightly unpleasant',
+    'Neutral',
+    'Slightly pleasant',
+    'Pleasant',
+    'Very pleasant'
+  ];
 
   // Check if screen reader is enabled
   useEffect(() => {
@@ -53,6 +54,14 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     };
   }, []);
 
+  // Default to neutral center if value is null
+  useEffect(() => {
+    if (value === null) {
+      onChange(50);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Notify parent component about validation state when value changes
   useEffect(() => {
     if (onValidationChange) {
@@ -62,49 +71,37 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
 
   // Get description based on rating
   const getRatingDescription = (rating: number | null): string => {
-    if (rating === null) return 'Select your mood';
-    
-    if (rating <= 2) return 'Very negative';
-    if (rating <= 4) return 'Negative';
-    if (rating <= 6) return 'Neutral';
-    if (rating <= 8) return 'Positive';
-    return 'Very positive';
+    if (rating === null) return 'Slide to rate your mood';
+    // Map 1..100 to anchors
+    const idx = Math.min(6, Math.max(0, Math.round(((rating - 1) / 99) * 6)));
+    return anchors[idx];
   };
 
   // Get color based on rating
   const getRatingColor = (rating: number): string => {
-    if (rating <= 2) return '#E53935'; // Red
-    if (rating <= 4) return '#FB8C00'; // Orange
-    if (rating <= 6) return '#FDD835'; // Yellow
-    if (rating <= 8) return '#7CB342'; // Light Green
-    return '#43A047'; // Green
+    // Gradient from red to green across 1..100
+    const t = Math.max(0, Math.min(1, (rating - 1) / 99));
+    const r = Math.round(227 + (67 - 227) * t);
+    const g = Math.round(57 + (160 - 57) * t);
+    const b = Math.round(53 + (71 - 53) * t);
+    return `rgb(${r},${g},${b})`;
   };
   
   // Get emoji based on rating
   const getRatingEmoji = (rating: number): string => {
-    if (rating <= 2) return '😢';
-    if (rating <= 4) return '😕';
-    if (rating <= 6) return '😐';
-    if (rating <= 8) return '🙂';
+    const t = (rating - 1) / 99;
+    if (t < 0.15) return '😢';
+    if (t < 0.35) return '😕';
+    if (t < 0.5) return '😐';
+    if (t < 0.75) return '🙂';
     return '😄';
   };
   
   // Get detailed description for accessibility
-  const getDetailedDescription = (rating: number): string => {
-    if (rating <= 2) return 'Very negative mood, feeling sad or upset';
-    if (rating <= 4) return 'Negative mood, feeling down or troubled';
-    if (rating <= 6) return 'Neutral mood, feeling okay or balanced';
-    if (rating <= 8) return 'Positive mood, feeling good or content';
-    return 'Very positive mood, feeling great or excited';
-  };
+  const getDetailedDescription = (rating: number): string => getRatingDescription(rating);
   
   // Handle rating selection with animation and haptic feedback
   const handleRatingSelect = (rating: number) => {
-    // Provide haptic feedback if not using screen reader
-    if (!screenReaderEnabled) {
-      Vibration.vibrate(10);
-    }
-    
     // Animate the scale
     Animated.sequence([
       Animated.timing(scaleAnim, {
@@ -135,10 +132,10 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
       style={styles.container}
       accessible={true}
       accessibilityLabel="Mood rating selector"
-      accessibilityHint="Select a number from 1 to 10 to rate your current mood"
-      accessibilityRole="radiogroup"
+      accessibilityHint="Slide to rate your current mood"
+      accessibilityRole="adjustable"
     >
-      <Text style={styles.title}>Mood Rating ({minRating}-{maxRating})</Text>
+      <Text style={styles.title}>Mood Rating</Text>
       
       <Animated.View style={[
         styles.descriptionContainer,
@@ -150,38 +147,33 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
         </Text>
       </Animated.View>
       
-      <View style={styles.ratingContainer}>
-        {ratings.map((rating) => (
-          <TouchableOpacity
-            key={rating}
-            style={[
-              styles.ratingButton,
-              value === rating && { 
-                backgroundColor: getRatingColor(rating),
-                transform: [{ scale: 1.1 }]
-              }
-            ]}
-            onPress={() => handleRatingSelect(rating)}
-            accessibilityLabel={`Rate your mood ${rating} out of ${maxRating}`}
-            accessibilityHint={`Selecting ${rating} indicates ${getDetailedDescription(rating)}`}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: value === rating }}
-          >
-            <Text 
-              style={[
-                styles.ratingText, 
-                value === rating && styles.selectedRatingText
-              ]}
-            >
-              {rating}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={[styles.sliderTrack, { height: 22 }]}
+        onLayout={(e) => {
+          // store width in ref via state closure using invisible state
+          (styles as any)._trackWidth = e.nativeEvent.layout.width;
+        }}
+      >
+        <View style={[styles.sliderFill, { width: Math.max(0, ((((value ?? 1) - 1) / 99) * ((styles as any)._trackWidth || 0))), backgroundColor: getRatingColor(value ?? 1) }]} />
+        <View style={[styles.sliderThumb, { transform: [{ translateX: Math.max(0, (((value ?? 1) - 1) / 99) * ((styles as any)._trackWidth || 0)) - 14 }], borderColor: getRatingColor(value ?? 1) }]} />
+        {/* Rounded ends are provided by borderRadius; no extra caps */}
+        <View style={styles.touchOverlay}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
+          onResponderGrant={(e) => {
+            const x = e.nativeEvent.locationX; const trackWidth = (styles as any)._trackWidth || 1; const pct = Math.max(0, Math.min(1, x / trackWidth)); const rating = Math.round(1 + pct * 99); handleRatingSelect(rating);
+          }}
+          onResponderMove={(e) => {
+            const x = e.nativeEvent.locationX; const trackWidth = (styles as any)._trackWidth || 1; const pct = Math.max(0, Math.min(1, x / trackWidth)); const rating = Math.round(1 + pct * 99); handleRatingSelect(rating);
+          }}
+          onResponderRelease={() => {}}
+          onResponderTerminate={() => {}}
+        />
       </View>
       
       <View style={styles.scaleLabels}>
-        <Text style={styles.scaleLabel}>Negative</Text>
-        <Text style={styles.scaleLabel}>Positive</Text>
+        <Text style={styles.scaleLabel}>Very unpleasant</Text>
+        <Text style={styles.scaleLabel}>Very pleasant</Text>
       </View>
       
       {value === null && (
@@ -192,7 +184,7 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
       
       {value !== null && (
         <Text style={styles.selectionFeedback} accessibilityLiveRegion="polite">
-          You selected: {value} - {getRatingDescription(value)}
+          You selected: {getRatingDescription(value ?? 1)}
         </Text>
       )}
     </View>
@@ -224,33 +216,39 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   ratingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 10,
-    flexWrap: 'wrap',
-    paddingHorizontal: 5,
+    display: 'none',
   },
-  ratingButton: {
-    width: 35,
-    height: 35,
-    borderRadius: 17.5,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 1,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
+  sliderTrack: {
+    position: 'relative',
+    height: 16,
+    borderRadius: 11,
+    backgroundColor: '#eee',
+    overflow: 'visible', // allow thumb shadow to render
   },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '500',
+  sliderFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#4CAF50',
+    borderTopLeftRadius: 11,
+    borderBottomLeftRadius: 11,
   },
-  selectedRatingText: {
-    color: 'white',
-    fontWeight: 'bold',
+  sliderThumb: {
+    position: 'absolute',
+    top: -3,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 3,
+    backgroundColor: '#fff',
+  },
+  touchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   scaleLabels: {
     flexDirection: 'row',
