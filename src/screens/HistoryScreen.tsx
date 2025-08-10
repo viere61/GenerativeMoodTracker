@@ -176,7 +176,7 @@ const HistoryScreen = () => {
               <Text style={styles.detailText}>{selectedEntry.reflection}</Text>
             </View>
             
-            {selectedEntry.musicGenerated && selectedEntry.musicId && (
+            {selectedEntry.musicId && (
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Generated Music:</Text>
                 <MusicPlayer 

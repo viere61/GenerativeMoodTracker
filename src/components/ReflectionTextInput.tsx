@@ -19,17 +19,19 @@ interface ReflectionTextInputProps {
 /**
  * A component for entering mood reflection text
  * Allows users to write about their current emotional state
- * Implements requirement 1.7: "WHEN a user submits a mood entry THEN the system SHALL require a descriptive reflection text (minimum 20 characters)"
+ * Updated: reflection length restriction removed; provides day-of-week prompts
  */
 const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
   value,
   onChange,
-  minLength = 20,
+  // No minimum length restriction
+  minLength = 0,
   maxLength = 1000,
   onValidationChange,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
+  const [weeklyPrompt, setWeeklyPrompt] = useState('');
   
   // Check if screen reader is enabled
   useEffect(() => {
@@ -52,50 +54,56 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
     };
   }, []);
 
-  // Notify parent component about validation state when text changes
+  // Compute weekly prompt and notify parent that input is valid (no min length)
   useEffect(() => {
-    if (onValidationChange) {
-      onValidationChange(value.length >= minLength);
+    const day = new Date().getDay(); // 0 = Sunday, 1 = Monday, ... 6 = Saturday
+    let prompt = '';
+    switch (day) {
+      case 1:
+        prompt = 'Monday: Share one object that encapsulates your feeling.';
+        break;
+      case 2:
+        prompt = 'Tuesday: Share three words that capture your day.';
+        break;
+      case 3:
+        prompt = 'Wednesday: What environment matches your current state of mind?';
+        break;
+      case 4:
+        prompt = 'Thursday: How does your mood feel in your body right now?';
+        break;
+      case 5:
+        prompt = 'Friday: If your mood were weather, what would it be?';
+        break;
+      case 6:
+        prompt = 'Saturday: Journal whatever you want!';
+        break;
+      case 0:
+      default:
+        prompt = 'Sunday: Journal whatever you want!';
+        break;
     }
-    
-    // Announce character count for screen readers when approaching minimum length
-    if (screenReaderEnabled && value.length > 0 && value.length < minLength) {
-      const remaining = minLength - value.length;
-      if (remaining === 5 || remaining === 10 || remaining === 1) {
-        AccessibilityInfo.announceForAccessibility(
-          `${remaining} character${remaining !== 1 ? 's' : ''} remaining to meet minimum length`
-        );
-      }
-    }
-  }, [value, minLength, onValidationChange, screenReaderEnabled]);
+    setWeeklyPrompt(prompt);
+  }, []);
+
+  useEffect(() => {
+    onValidationChange?.(true);
+  }, [value, onValidationChange]);
 
   // Get border color based on validation and focus state
   const getBorderColor = () => {
     if (isFocused) return '#2196F3';
-    if (value.length > 0 && value.length < minLength) return '#E53935';
-    if (value.length >= minLength) return '#4CAF50';
     return '#CCCCCC';
   };
 
-  // Get character count color based on validation
-  const getCharCountColor = () => {
-    if (value.length === 0) return '#666';
-    if (value.length < minLength) return '#E53935';
-    if (value.length >= maxLength * 0.9) return '#FB8C00';
-    return '#4CAF50';
-  };
-
-  // Get placeholder text with minimum length requirement
+  // Get placeholder text (no min length requirement)
   const getPlaceholder = () => {
-    return `Write about how you're feeling today... (minimum ${minLength} characters)`;
+    return weeklyPrompt || "Start journaling your reflection here...";
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Reflection</Text>
-      <Text style={styles.subtitle}>
-        Take a moment to describe how you're feeling and why
-      </Text>
+      <Text style={styles.subtitle}>{weeklyPrompt}</Text>
       
       <TextInput
         style={[
@@ -111,43 +119,20 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
         maxLength={maxLength}
         textAlignVertical="top"
         accessibilityLabel="Mood reflection text input"
-        accessibilityHint={`Write at least ${minLength} characters describing how you feel`}
+        accessibilityHint="Write anything that reflects your current mood"
         accessibilityRole="text"
         accessibilityState={{ 
           disabled: false,
           selected: isFocused,
-          checked: value.length >= minLength
+          checked: true
         }}
       />
-      
-      <View style={styles.infoContainer}>
-        <Text 
-          style={[styles.characterCount, { color: getCharCountColor() }]}
-          accessibilityLiveRegion="polite"
-        >
-          {value.length}/{minLength} characters
-          {value.length < minLength ? ` (${minLength - value.length} more needed)` : ''}
-        </Text>
-        
-        {Platform.OS === 'ios' && (
+
+      {Platform.OS === 'ios' && (
+        <View style={styles.infoContainer}>
           <Text style={styles.iosKeyboardTip}>
             Tap outside the text area to dismiss keyboard
           </Text>
-        )}
-      </View>
-      
-      {value.length > 0 && value.length < minLength && (
-        <Text style={styles.validationMessage} accessibilityLiveRegion="polite">
-          Please enter at least {minLength} characters
-        </Text>
-      )}
-      
-      {value.length >= minLength && (
-        <View style={styles.promptContainer}>
-          <Text style={styles.promptTitle}>Reflection Prompts:</Text>
-          <Text style={styles.promptText}>• What triggered these emotions?</Text>
-          <Text style={styles.promptText}>• How has this affected your day?</Text>
-          <Text style={styles.promptText}>• What might help you feel better?</Text>
         </View>
       )}
     </View>
@@ -187,39 +172,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 5,
   },
-  characterCount: {
-    fontSize: 14,
-  },
   iosKeyboardTip: {
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
-  },
-  validationMessage: {
-    color: '#E53935',
-    fontSize: 14,
-    marginTop: 10,
-    fontWeight: 'bold',
-    padding: 5,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 5,
-  },
-  promptContainer: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 5,
-  },
-  promptTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 5,
-    color: '#2E7D32',
-  },
-  promptText: {
-    fontSize: 14,
-    color: '#333',
-    marginVertical: 2,
   },
 });
 

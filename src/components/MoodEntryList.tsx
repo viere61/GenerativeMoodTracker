@@ -153,7 +153,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
         >
           {item.reflection}
         </Text>
-        {item.musicGenerated && (
+        {(item.musicGenerated || item.musicId) && (
           <View style={styles.musicIndicator}>
             <TouchableOpacity 
               style={styles.musicButton}

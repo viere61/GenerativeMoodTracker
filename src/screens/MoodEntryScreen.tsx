@@ -45,7 +45,8 @@ const MoodEntryScreen = () => {
   const [isRatingValid, setIsRatingValid] = useState(false);
   const [areTagsValid, setAreTagsValid] = useState(false);
   const [areInfluencesValid, setAreInfluencesValid] = useState(false);
-  const [isReflectionValid, setIsReflectionValid] = useState(false);
+  // Reflection no longer requires a minimum length; consider valid by default
+  const [isReflectionValid, setIsReflectionValid] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAlreadyLoggedToday, setHasAlreadyLoggedToday] = useState(false);
   const [useSimpleComponents, setUseSimpleComponents] = useState(false);
@@ -149,6 +150,28 @@ const MoodEntryScreen = () => {
     );
   }
   
+  // Helper: weekly prompt for simple input placeholder
+  const getWeeklyPromptPlaceholder = () => {
+    const day = new Date().getDay(); // 0=Sun..6=Sat
+    switch (day) {
+      case 1:
+        return 'Monday: Share one object that encapsulates your feeling.';
+      case 2:
+        return 'Tuesday: Share three words that capture your day.';
+      case 3:
+        return 'Wednesday: What environment matches your current state of mind?';
+      case 4:
+        return 'Thursday: How does your mood feel in your body right now?';
+      case 5:
+        return 'Friday: If your mood were weather, what would it be?';
+      case 6:
+        return 'Saturday: Journal whatever you want!';
+      case 0:
+      default:
+        return 'Sunday: Journal whatever you want!';
+    }
+  };
+
   // Use simple components if there was an error or for better web compatibility
   if (useSimpleComponents) {
     return (
@@ -246,18 +269,16 @@ const MoodEntryScreen = () => {
         
         {/* Simple reflection input */}
         <View style={styles.reflectionContainer}>
-          <Text style={styles.sectionTitle}>Reflection (minimum 20 characters)</Text>
+          <Text style={styles.sectionTitle}>Reflection</Text>
           <TextInput
             style={styles.textInput}
             multiline
-            placeholder="Write about how you're feeling today..."
+            placeholder={getWeeklyPromptPlaceholder()}
             value={reflection}
             onChangeText={setReflection}
             maxLength={500}
           />
-          <Text style={styles.characterCount}>
-            {reflection.length}/20 characters
-          </Text>
+          {/* No minimum length required */}
         </View>
         
         <View style={styles.submitContainer}>
@@ -291,11 +312,7 @@ const MoodEntryScreen = () => {
             {influences.length === 0 && (
               <Text style={styles.validationMessage}>• Select at least one influence</Text>
             )}
-            {reflection.length < 20 && (
-              <Text style={styles.validationMessage}>
-                • Write a reflection (minimum 20 characters)
-              </Text>
-            )}
+            {/* No reflection length validation */}
           </View>
         )}
         
@@ -346,7 +363,7 @@ const MoodEntryScreen = () => {
               <ReflectionTextInput
                 value={reflection}
                 onChange={setReflection}
-                minLength={20}
+                minLength={0}
                 onValidationChange={setIsReflectionValid}
               />
             </View>
@@ -382,11 +399,7 @@ const MoodEntryScreen = () => {
                 {!areInfluencesValid && (
                   <Text style={styles.validationMessage}>• Select at least one influence</Text>
                 )}
-                {!isReflectionValid && (
-                  <Text style={styles.validationMessage}>
-                    • Write a reflection (minimum 20 characters)
-                  </Text>
-                )}
+                {/* No reflection length validation */}
               </View>
             )}
             <View style={{ height: 100 }} />
@@ -425,7 +438,7 @@ const MoodEntryScreen = () => {
             <ReflectionTextInput
               value={reflection}
               onChange={setReflection}
-              minLength={20}
+              minLength={0}
               onValidationChange={setIsReflectionValid}
             />
           </View>
@@ -461,11 +474,7 @@ const MoodEntryScreen = () => {
                 {!areInfluencesValid && (
                   <Text style={styles.validationMessage}>• Select at least one influence</Text>
                 )}
-                {!isReflectionValid && (
-                  <Text style={styles.validationMessage}>
-                    • Write a reflection (minimum 20 characters)
-                  </Text>
-                )}
+                {/* No reflection length validation */}
             </View>
           )}
           <View style={{ height: 100 }} />

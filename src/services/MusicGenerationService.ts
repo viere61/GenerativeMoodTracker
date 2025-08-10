@@ -666,6 +666,24 @@ class MusicGenerationService {
           await LocalStorageManager.storeGeneratedMusic(userId, generatedMusic);
         }
         console.log('🎵 [generateMusic] Music stored successfully');
+
+        // Additional safeguard: update the corresponding mood entry with musicId immediately
+        try {
+          console.log('🎵 [generateMusic] Attempting to update mood entry with musicId...');
+          if (isWeb) {
+            const entries = await WebStorageService.retrieveMoodEntries(userId);
+            const updated = entries.map(e => e.entryId === moodEntry.entryId ? { ...e, musicGenerated: true, musicId: generatedMusic.musicId } : e);
+            await WebStorageService.storeMoodEntries(userId, updated);
+          } else {
+            await LocalStorageManager.updateMoodEntry(userId, moodEntry.entryId, {
+              musicGenerated: true,
+              musicId: generatedMusic.musicId,
+            });
+          }
+          console.log('🎵 [generateMusic] Mood entry updated with musicId:', generatedMusic.musicId);
+        } catch (updateError) {
+          console.error('🎵 [generateMusic] Failed to update mood entry with musicId (non-fatal):', updateError);
+        }
       }
 
       this.generationInProgress = false;
@@ -709,13 +727,13 @@ class MusicGenerationService {
   private createMusicPrompt(moodEntry: MoodEntry): string {
     const { reflection } = moodEntry;
 
-    // Use only the reflection text as the prompt
-    if (reflection && reflection.trim()) {
-      return reflection.trim();
-    } else {
-      // Fallback if no reflection text
-      return "peaceful ambient soundscape";
+    // Prompt engineering: prefix user input for ambient soundscape
+    const userText = reflection?.trim();
+    if (userText) {
+      return `Ambient soundscape that represents ${userText}`;
     }
+    // Fallback if no reflection text
+    return 'Ambient soundscape that represents a peaceful mood';
   }
 
   /**
@@ -874,6 +892,27 @@ class MusicGenerationService {
       // Convert base64 to array buffer using our safe utility
       const audioArray = base64ToUint8Array(result.audioData);
 
+      // Store raw base64 audio for mobile as a fallback reconstruction source
+      try {
+        if (!isWeb && result.audioData) {
+          await LocalStorageManager.storeAudioData(musicObject.musicId, result.audioData);
+          if (isDebugMode()) {
+            console.log('🎵 Stored base64 audio data for musicId:', musicObject.musicId);
+          }
+        }
+      } catch (audioStoreErr) {
+        console.warn('🎵 Warning: failed to store base64 audio data (non-fatal):', audioStoreErr);
+      }
+
+       // Persist audio data as well for mobile retrieval consistency
+       try {
+         if (!isWeb) {
+           await LocalStorageManager.storeGeneratedMusic(musicObject.userId, musicObject);
+         }
+       } catch (persistErr) {
+         console.warn('🎵 Warning: failed to persist generated music immediately:', persistErr);
+       }
+
       // Create a mock blob object with the _data property that React Native expects
       const audioBlob = {
         _data: audioArray.buffer,
@@ -910,15 +949,9 @@ class MusicGenerationService {
 
 
   private convertMoodToSoundDescription(prompt: string): string {
-    // The prompt is now just the reflection text - return it directly
-    const reflectionText = prompt.trim();
-
-    if (reflectionText) {
-      return reflectionText;
-    } else {
-      // Fallback if no reflection text
-      return "peaceful ambient soundscape";
-    }
+    // Already prefixed in createMusicPrompt
+    const finalPrompt = prompt.trim();
+    return finalPrompt || 'Ambient soundscape that represents a peaceful mood';
   }
 
 

@@ -138,6 +138,44 @@ class MoodEntryService {
             console.log('📱 Entry:', entry.entryId, 'musicGenerated:', entry.musicGenerated, 'musicId:', entry.musicId);
           });
         }
+
+        // Reconcile entries with any generated music stored separately (failsafe)
+        try {
+          const generatedMusicList = await LocalStorageManager.retrieveAllGeneratedMusic(userId);
+          if (generatedMusicList && generatedMusicList.length > 0) {
+            const musicByEntryId = new Map(generatedMusicList.map(m => [m.entryId, m.musicId]));
+            let hasChanges = false;
+            const reconciled = (entries || []).map(e => {
+              const musicId = musicByEntryId.get(e.entryId);
+              if (musicId && (!e.musicGenerated || !e.musicId)) {
+                hasChanges = true;
+                return { ...e, musicGenerated: true, musicId };
+              }
+              return e;
+            });
+            if (hasChanges) {
+              console.log('🔧 [MoodEntryService] Reconciled mood entries with generated music. Persisting updates...');
+              await LocalStorageManager.storeMoodEntries(userId, reconciled);
+              entries.splice(0, entries.length, ...reconciled);
+            }
+          }
+        } catch (reconcileError) {
+          console.error('⚠️ [MoodEntryService] Failed to reconcile generated music with mood entries:', reconcileError);
+        }
+
+        // Backfill generation for any pending entries (non-blocking)
+        try {
+          const pending = (entries || []).find(e => !e.musicGenerated && !e.musicId);
+          if (pending) {
+            console.log('🎵 [MoodEntryService] Found pending entry without music. Triggering generation:', pending.entryId);
+            // Fire and forget; do not await
+            this.triggerMusicGeneration(userId, pending).catch(err => {
+              console.error('🎵 [MoodEntryService] Backfill generation failed (non-fatal):', err);
+            });
+          }
+        } catch (backfillErr) {
+          console.error('🎵 [MoodEntryService] Error during backfill detection:', backfillErr);
+        }
         return entries || [];
       }
     } catch (error) {
