@@ -59,6 +59,8 @@ class MusicGenerationService {
   // Track generation status
   private generationInProgress = false;
   private generationQueue: Array<{ userId: string, moodEntry: MoodEntry }> = [];
+  // Prevent duplicate generations for the same entry
+  private generatingEntryIds: Set<string> = new Set();
 
   // Enhanced mapping of mood ratings to musical parameters
   private moodToMusicMap: Record<number, {
@@ -621,6 +623,16 @@ class MusicGenerationService {
    */
   async generateMusic(userId: string, moodEntry: MoodEntry): Promise<GeneratedMusic | null> {
     try {
+      // De-duplicate by entryId: if already generating or queued, skip
+      const alreadyQueued = this.generationQueue.some(q => q.moodEntry.entryId === moodEntry.entryId);
+      if (this.generatingEntryIds.has(moodEntry.entryId) || alreadyQueued) {
+        console.log('🎵 [generateMusic] Duplicate generation request detected for entry, skipping:', moodEntry.entryId);
+        return null;
+      }
+
+      // Mark as in-progress for this entry
+      this.generatingEntryIds.add(moodEntry.entryId);
+
       console.log('🎵 [generateMusic] Starting music generation for entry:', moodEntry.entryId);
       console.log('🎵 [generateMusic] MoodEntry:', {
         moodRating: moodEntry.moodRating,
@@ -632,8 +644,13 @@ class MusicGenerationService {
       // Check if music generation is already in progress
       if (this.generationInProgress) {
         console.log('🎵 [generateMusic] Music generation already in progress, adding to queue');
-        // Add to queue and return null
-        this.generationQueue.push({ userId, moodEntry });
+        // Add to queue only if not present
+        const exists = this.generationQueue.some(item => item.moodEntry.entryId === moodEntry.entryId);
+        if (!exists) {
+          this.generationQueue.push({ userId, moodEntry });
+        } else {
+          console.log('🎵 [generateMusic] Entry already in queue, not adding duplicate:', moodEntry.entryId);
+        }
         return null;
       }
 
@@ -705,6 +722,12 @@ class MusicGenerationService {
 
       return null;
     }
+    finally {
+      // Ensure we clear the in-progress flag for this entry
+      try {
+        this.generatingEntryIds.delete(moodEntry.entryId);
+      } catch {}
+    }
   }
 
   /**
@@ -714,6 +737,11 @@ class MusicGenerationService {
     if (this.generationQueue.length > 0) {
       const nextItem = this.generationQueue.shift();
       if (nextItem) {
+        // Skip if entry is already in-progress (dedupe)
+        if (this.generatingEntryIds.has(nextItem.moodEntry.entryId)) {
+          console.log('🎵 [processNextInQueue] Entry already in progress, skipping:', nextItem.moodEntry.entryId);
+          return;
+        }
         await this.generateMusic(nextItem.userId, nextItem.moodEntry);
       }
     }
@@ -730,10 +758,10 @@ class MusicGenerationService {
     // Prompt engineering: prefix user input for ambient soundscape
     const userText = reflection?.trim();
     if (userText) {
-      return `Ambient soundscape that represents ${userText}`;
+      return `Ambient soundscape: ${userText}`;
     }
     // Fallback if no reflection text
-    return 'Ambient soundscape that represents a peaceful mood';
+    return 'Ambient soundscape: peaceful mood';
   }
 
   /**
@@ -951,7 +979,7 @@ class MusicGenerationService {
   private convertMoodToSoundDescription(prompt: string): string {
     // Already prefixed in createMusicPrompt
     const finalPrompt = prompt.trim();
-    return finalPrompt || 'Ambient soundscape that represents a peaceful mood';
+    return finalPrompt || 'Ambient soundscape: peaceful mood';
   }
 
 

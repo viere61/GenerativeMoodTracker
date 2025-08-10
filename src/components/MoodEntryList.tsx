@@ -45,6 +45,11 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
   const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
   const [moodRangeFilter, setMoodRangeFilter] = useState<[number, number]>([1, 10]);
   
+  // Determine the most recent entry (soft-locked)
+  const mostRecentEntryId = entries.length > 0
+    ? entries.reduce((latest, e) => (e.timestamp > latest.timestamp ? e : latest), entries[0]).entryId
+    : null;
+  
   // Get unique emotions from all entries
   const allEmotions = Array.from(
     new Set(entries.flatMap(entry => entry.emotionTags))
@@ -153,7 +158,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
         >
           {item.reflection}
         </Text>
-        {(item.musicGenerated || item.musicId) && (
+        {(item.musicGenerated || item.musicId) && item.entryId !== mostRecentEntryId && (
           <View style={styles.musicIndicator}>
             <TouchableOpacity 
               style={styles.musicButton}
@@ -163,6 +168,11 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
             >
               <Text style={styles.musicText}>♪ Play Music</Text>
             </TouchableOpacity>
+          </View>
+        )}
+        {item.entryId === mostRecentEntryId && (
+          <View style={styles.musicIndicator}>
+            <Text style={styles.lockText}>🔒 AI sound available after your next log</Text>
           </View>
         )}
       </View>
@@ -436,6 +446,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4a90e2',
     fontStyle: 'italic',
+  },
+  lockText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 6,
   },
   emptyContainer: {
     flex: 1,

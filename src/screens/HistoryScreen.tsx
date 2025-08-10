@@ -176,14 +176,28 @@ const HistoryScreen = () => {
               <Text style={styles.detailText}>{selectedEntry.reflection}</Text>
             </View>
             
-            {selectedEntry.musicId && (
+            {(() => {
+              // Determine most recent by timestamp
+              const latest = moodEntries.reduce((acc, e) => (e.timestamp > acc.timestamp ? e : acc), moodEntries[0] || selectedEntry);
+              const isMostRecent = selectedEntry.entryId === latest.entryId;
+              return selectedEntry.musicId && !isMostRecent;
+            })() && (
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Generated Music:</Text>
                 <MusicPlayer 
-                  musicId={selectedEntry.musicId} 
+                  musicId={selectedEntry.musicId as string}
                   userId={user.userId}
                   onError={(message) => console.error(`Music player error: ${message}`)}
                 />
+              </View>
+            )}
+            {(() => {
+              const latest = moodEntries.reduce((acc, e) => (e.timestamp > acc.timestamp ? e : acc), moodEntries[0] || selectedEntry);
+              return selectedEntry.entryId === latest.entryId;
+            })() && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Generated Music:</Text>
+                <Text style={styles.lockInfo}>🔒 Locked until your next successful daily log</Text>
               </View>
             )}
             
@@ -330,26 +344,7 @@ const HistoryScreen = () => {
       </View>
       
       {/* Show info when music generation might be in progress */}
-      {(() => {
-        const now = Date.now();
-        const twoMinutesAgo = now - (2 * 60 * 1000);
-        const hasRecentGeneratingEntries = moodEntries.some(entry => 
-          entry.timestamp > twoMinutesAgo && 
-          !entry.musicGenerated && 
-          entry.musicId === undefined
-        );
-        
-        if (hasRecentGeneratingEntries) {
-          return (
-            <View style={styles.musicGenerationInfo}>
-              <Text style={styles.musicGenerationText}>
-                🎵 Music generation in progress... Use the refresh button to check for updates
-              </Text>
-            </View>
-          );
-        }
-        return null;
-      })()}
+      {/* Removed: generation status visual, as the most recent entry is soft-locked */}
       
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -571,6 +566,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1565C0',
     textAlign: 'center',
+  },
+  lockInfo: {
+    fontSize: 14,
+    color: '#777',
+    fontStyle: 'italic',
+    marginTop: 6,
   },
 });
 

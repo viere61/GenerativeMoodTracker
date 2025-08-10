@@ -84,6 +84,7 @@ const SliderComponent = ({
 };
 import { Ionicons } from '@expo/vector-icons';
 import MusicGenerationService from '../services/MusicGenerationService';
+import MoodEntryService from '../services/MoodEntryService';
 import { GeneratedMusic } from '../types';
 import * as FileSystem from 'expo-file-system';
 
@@ -117,6 +118,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   
   // State for playback status message
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState<boolean>(false);
   
   // Load music details when component mounts
   useEffect(() => {
@@ -193,6 +195,17 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
       
       setMusicDetails(music);
       setDuration(music.duration);
+
+      // Determine if this music is locked (most recent entry)
+      try {
+        const entries = await MoodEntryService.getMoodEntries(userId);
+        const latest = [...entries].reduce((acc, e) => (e.timestamp > acc.timestamp ? e : acc), entries[0]);
+        const locked = latest && latest.entryId === music.entryId;
+        setIsLocked(!!locked);
+      } catch (lockErr) {
+        // If we cannot determine, default to not locked to avoid blocking unexpectedly
+        setIsLocked(false);
+      }
       
       // Check if this music is currently playing
       const playbackStatus = MusicGenerationService.getPlaybackStatus();
@@ -280,6 +293,10 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
     try {
       console.log('Play button pressed for music ID:', musicId);
       console.log('Current music details:', musicDetails);
+      if (isLocked) {
+        Alert.alert('Locked', '🔒 This AI sound will be available after your next successful daily log.');
+        return;
+      }
       
       if (isPlaying) {
         // If already playing, pause

@@ -70,7 +70,7 @@ class MoodEntryService {
         await LocalStorageManager.storeMoodEntries(userId, updatedEntries);
       }
       
-      // Trigger music generation asynchronously
+      // Trigger music generation asynchronously once, and ensure no duplicates are queued
       console.log('🎵 [saveMoodEntry] About to trigger music generation for entry:', newEntry.entryId);
       this.triggerMusicGeneration(userId, newEntry).catch(error => {
         console.error('🎵 [saveMoodEntry] Music generation failed:', error);
@@ -163,19 +163,7 @@ class MoodEntryService {
           console.error('⚠️ [MoodEntryService] Failed to reconcile generated music with mood entries:', reconcileError);
         }
 
-        // Backfill generation for any pending entries (non-blocking)
-        try {
-          const pending = (entries || []).find(e => !e.musicGenerated && !e.musicId);
-          if (pending) {
-            console.log('🎵 [MoodEntryService] Found pending entry without music. Triggering generation:', pending.entryId);
-            // Fire and forget; do not await
-            this.triggerMusicGeneration(userId, pending).catch(err => {
-              console.error('🎵 [MoodEntryService] Backfill generation failed (non-fatal):', err);
-            });
-          }
-        } catch (backfillErr) {
-          console.error('🎵 [MoodEntryService] Error during backfill detection:', backfillErr);
-        }
+        // Removed backfill auto-generation to prevent duplicate generations
         return entries || [];
       }
     } catch (error) {
