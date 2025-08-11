@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Switch, Button, Alert, Modal, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 import DataExportModal from '../components/DataExportModal';
-import EmailNotificationSettings from '../components/EmailNotificationSettings';
 import PushNotificationSettings from '../components/PushNotificationSettings';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
@@ -13,7 +12,7 @@ const SettingsScreen = () => {
   // State for modals
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [timeRangeModalVisible, setTimeRangeModalVisible] = useState(false);
-  const [privacySettingsModalVisible, setPrivacySettingsModalVisible] = useState(false);
+  // Removed privacy settings modal
   
   // State for time range inputs
   const [startTime, setStartTime] = useState('09:00');
@@ -172,38 +171,13 @@ const SettingsScreen = () => {
   };
   
   // Handle sign out (demo mode - just show message)
-  const handleSignOut = async () => {
-    Alert.alert('Demo Mode', 'Sign out is not available in demo mode. In a real app, this would sign you out of your account.');
-  };
+  // Sign out removed in simplified settings
   
   // Handle delete account (demo mode - just show message)
-  const handleDeleteAccount = async (password: string) => {
-    Alert.alert('Demo Mode', 'Account deletion is not available in demo mode. In a real app, this would delete your account after password verification.');
-  };
+  // Account deletion removed in simplified settings
   
   // Handle privacy settings update
-  const handlePrivacySettingsUpdate = async (dataSharing: boolean, analyticsEnabled: boolean) => {
-    try {
-      if (!userId) {
-        Alert.alert('Error', 'User not authenticated');
-        return;
-      }
-      
-      // Update the privacy options
-      await updatePreference('settings.privacyOptions', {
-        dataSharing,
-        analyticsEnabled
-      });
-      
-      // Close the modal
-      setPrivacySettingsModalVisible(false);
-      
-      Alert.alert('Success', 'Privacy settings updated successfully');
-    } catch (error) {
-      console.error('Privacy settings update error:', error);
-      Alert.alert('Error', 'Failed to update privacy settings');
-    }
-  };
+  // Privacy settings removed
   
   // Handle test notification
   const handleTestNotification = async () => {
@@ -241,11 +215,11 @@ const SettingsScreen = () => {
         </View>
       </View>
       
-      {/* Notifications Section */}
+      {/* Notifications Section (kept for push only) */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
+        <Text style={styles.sectionTitle}>Push Notifications</Text>
         <View style={styles.settingRow}>
-          <Text>Enable Notifications</Text>
+          <Text>Enable Push Notifications</Text>
           <Switch
             value={preferences?.notifications ?? true}
             onValueChange={handleNotificationsToggle}
@@ -259,70 +233,20 @@ const SettingsScreen = () => {
         />
       </View>
 
-      {/* Email Notifications Section (Accordion) */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setEmailAccordionOpen((open) => !open)}
-        >
-          <Text style={styles.sectionTitle}>Email Notifications</Text>
-          <AntDesign name={emailAccordionOpen ? 'up' : 'down'} size={20} color="#333" />
-        </TouchableOpacity>
-        {emailAccordionOpen && <EmailNotificationSettings />}
-      </View>
+      {/* Email notifications removed */}
 
-      {/* Push Notifications Section (Accordion) */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setPushAccordionOpen((open) => !open)}
-        >
-          <Text style={styles.sectionTitle}>Push Notifications</Text>
-          <AntDesign name={pushAccordionOpen ? 'up' : 'down'} size={20} color="#333" />
-        </TouchableOpacity>
-        {pushAccordionOpen && <PushNotificationSettings />}
-      </View>
+      {/* Push notifications advanced settings removed */}
       
-      {/* Appearance Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Appearance</Text>
-        <View style={styles.settingRow}>
-          <Text>Dark Mode</Text>
-          <Switch
-            value={preferences?.theme === 'dark'}
-            onValueChange={handleThemeToggle}
-          />
-        </View>
-      </View>
+      {/* Appearance removed */}
       
-      {/* Audio Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Audio</Text>
-        <View style={styles.settingRow}>
-          <Text>High Quality Audio</Text>
-          <Switch
-            value={preferences?.audioQuality === 'high'}
-            onValueChange={handleAudioQualityToggle}
-          />
-        </View>
-      </View>
+      {/* Audio Section removed */}
       
-      {/* Account Section */}
+      {/* Account: keep only reset for testing */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
         <Button 
           title="Reset Daily Log Status (For Testing)" 
           onPress={handleResetDailyLog}
-        />
-        <View style={styles.spacer} />
-        <Button 
-          title="Privacy Settings" 
-          onPress={() => setPrivacySettingsModalVisible(true)}
-        />
-        <View style={styles.spacer} />
-        <Button 
-          title="Sign Out" 
-          onPress={handleSignOut}
         />
       </View>
       
@@ -333,11 +257,7 @@ const SettingsScreen = () => {
           title="Export Data" 
           onPress={() => setExportModalVisible(true)}
         />
-        <View style={styles.spacer} />
-        <Button 
-          title="Account Management (Demo)" 
-          onPress={() => Alert.alert('Demo Mode', 'Account management is not available in demo mode. In a real app, this would allow you to change password, delete account, etc.')}
-        />
+        
       </View>
       
       {/* Time Range Modal */}
@@ -393,27 +313,7 @@ const SettingsScreen = () => {
       
       {/* Account Management Modal - Disabled in demo mode */}
       
-      {/* Privacy Settings Modal */}
-      <Modal
-        visible={privacySettingsModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setPrivacySettingsModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Privacy Settings</Text>
-            
-            <PrivacySettingsContent 
-              initialSettings={preferences?.settings?.privacyOptions}
-              onSave={(dataSharing, analyticsEnabled) => {
-                handlePrivacySettingsUpdate(dataSharing, analyticsEnabled);
-              }}
-              onCancel={() => setPrivacySettingsModalVisible(false)}
-            />
-          </View>
-        </View>
-      </Modal>
+      {/* Privacy settings removed */}
       
       {/* Data Export Modal */}
       <DataExportModal

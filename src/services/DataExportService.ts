@@ -78,9 +78,6 @@ class DataExportService {
   private async collectUserData(userId: string, options: ExportOptions): Promise<any> {
     // Get user data
     const user = await LocalStorageManager.retrieveUserData(userId);
-    if (!user) {
-      throw new Error('User data not found');
-    }
     
     // Get mood entries
     let moodEntries = await LocalStorageManager.retrieveMoodEntries(userId);
@@ -112,7 +109,7 @@ class DataExportService {
     
     // Create the export data object
     const exportData = {
-      user: this.sanitizeUserData(user),
+      user: user ? this.sanitizeUserData(user) : { userId },
       moodEntries,
       music: options.includeMusic ? musicData : undefined
     };
@@ -318,13 +315,7 @@ class DataExportService {
    */
   async hasDataToExport(userId: string): Promise<boolean> {
     try {
-      // Check if user exists
-      const user = await LocalStorageManager.retrieveUserData(userId);
-      if (!user) {
-        return false;
-      }
-      
-      // Check if user has any mood entries
+      // Check if user has any mood entries (user profile optional)
       const entries = await LocalStorageManager.retrieveMoodEntries(userId);
       return entries.length > 0;
     } catch (error) {
