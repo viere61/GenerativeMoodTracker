@@ -166,7 +166,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
               accessibilityLabel="Play generated music"
               accessibilityHint="Opens the music player for this mood entry"
             >
-              <Text style={styles.musicText}>♪ Play Music</Text>
+              <Text style={styles.musicText}>♪ Play Audio</Text>
             </TouchableOpacity>
           </View>
         )}

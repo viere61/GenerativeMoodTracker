@@ -1843,8 +1843,20 @@ class MusicGenerationService {
   async stopMusic(): Promise<boolean> {
     try {
       if (this.soundObject) {
-        await this.soundObject.stopAsync();
-        await this.soundObject.unloadAsync();
+        try {
+          // Guard against race where seeking/playback events overlap stop
+          const status = await this.soundObject.getStatusAsync();
+          if (status.isLoaded) {
+            await this.soundObject.stopAsync();
+          }
+        } catch (e) {
+          console.warn('stopAsync warning (continuing to unload):', e);
+        }
+        try {
+          await this.soundObject.unloadAsync();
+        } catch (e) {
+          console.warn('unloadAsync warning (already unloaded?):', e);
+        }
         this.soundObject = null;
         this.isPlaying = false;
         this.currentMusicId = null;

@@ -71,8 +71,8 @@ const SliderComponent = ({
       <View
         style={{
           position: 'absolute',
-          left: `${value * 100}%`,
-          marginLeft: -10,
+            left: `${value * 100}%`,
+            marginLeft: value <= 0 ? 0 : -10,
           width: 20,
           height: 20,
           borderRadius: 10,
@@ -488,10 +488,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
     <View style={styles.container}>
       <View style={styles.musicInfoContainer}>
         <View style={styles.musicDetails}>
-          <Text style={styles.musicTitle}>Generated Music</Text>
-          <Text style={styles.musicSubtitle}>
-            {musicDetails.musicParameters.mood} • {musicDetails.musicParameters.key}
-          </Text>
+          <Text style={styles.musicTitle}>Generated Sound</Text>
           {statusMessage && (
             <Text style={styles.statusMessage}>{statusMessage}</Text>
           )}
@@ -562,18 +559,12 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         <Ionicons name="volume-high" size={18} color="#666" />
       </View>
       
-      <View style={styles.instrumentsContainer}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.instrumentsTitle}>Instruments:</Text>
-          <TouchableOpacity onPress={toggleDetailsView}>
-            <Text style={styles.detailsToggle}>
-              {showDetails ? "Hide Details" : "Show Details"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.instrumentsText}>
-          {musicDetails.musicParameters.instruments.join(', ')}
-        </Text>
+      <View style={styles.sectionHeader}>
+        <TouchableOpacity onPress={toggleDetailsView}>
+          <Text style={styles.detailsToggle}>
+            {showDetails ? "Hide Details" : "Show Details"}
+          </Text>
+        </TouchableOpacity>
       </View>
       
       {/* Detailed music information */}

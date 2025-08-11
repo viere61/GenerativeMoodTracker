@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MoodEntryService from '../services/MoodEntryService';
 import MoodEntryList from '../components/MoodEntryList';
@@ -10,8 +10,9 @@ import { MoodEntry } from '../types';
 import { Calendar } from 'react-native-calendars';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
+import WeeklySoundService from '../services/WeeklySoundService';
 
-const HistoryScreen = () => {
+const HistoryScreen = ({ route }: any) => {
   // Use demo user for web compatibility
   const user = { userId: 'demo-user' };
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
@@ -20,7 +21,8 @@ const HistoryScreen = () => {
   const [detailModalVisible, setDetailModalVisible] = useState<boolean>(false);
   const [calendarVisible, setCalendarVisible] = useState<boolean>(false);
   const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'list' | 'charts'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'charts' | 'weekly'>(route?.params?.initialHistoryTab || 'list');
+  const [weeklySelections, setWeeklySelections] = useState<any[]>([]);
   const [selectedDates, setSelectedDates] = useState<{
     startDate: string | null;
     endDate: string | null;
@@ -39,6 +41,10 @@ const HistoryScreen = () => {
     useCallback(() => {
       console.log('📱 [HistoryScreen] Screen focused, refreshing entries');
       loadMoodEntries();
+      (async () => {
+        const selections = await WeeklySoundService.getWeeklySelections(user.userId);
+        setWeeklySelections(selections);
+      })();
     }, [])
   );
 
@@ -183,7 +189,6 @@ const HistoryScreen = () => {
               return selectedEntry.musicId && !isMostRecent;
             })() && (
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Generated Music:</Text>
                 <MusicPlayer 
                   musicId={selectedEntry.musicId as string}
                   userId={user.userId}
@@ -196,7 +201,7 @@ const HistoryScreen = () => {
               return selectedEntry.entryId === latest.entryId;
             })() && (
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Generated Music:</Text>
+                <Text style={styles.detailLabel}>Generated Sound:</Text>
                 <Text style={styles.lockInfo}>🔒 Locked until your next successful daily log</Text>
               </View>
             )}
@@ -359,6 +364,12 @@ const HistoryScreen = () => {
         >
           <Text style={[styles.tabText, activeTab === 'charts' && styles.activeTabText]}>Charts</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'weekly' && styles.activeTabButton]}
+          onPress={() => setActiveTab('weekly')}
+        >
+          <Text style={[styles.tabText, activeTab === 'weekly' && styles.activeTabText]}>Sound of Week</Text>
+        </TouchableOpacity>
       </View>
       
       {activeTab === 'list' ? (
@@ -367,10 +378,19 @@ const HistoryScreen = () => {
           isLoading={isLoading}
           onEntryPress={handleEntryPress}
         />
-      ) : (
+      ) : activeTab === 'charts' ? (
         <MoodTrendCharts
           entries={moodEntries}
           isLoading={isLoading}
+        />
+      ) : (
+        <WeeklySoundTab
+          userId={user.userId}
+          weeklySelections={weeklySelections}
+          onSelectionMade={async () => {
+            const selections = await WeeklySoundService.getWeeklySelections(user.userId);
+            setWeeklySelections(selections);
+          }}
         />
       )}
       
@@ -576,3 +596,95 @@ const styles = StyleSheet.create({
 });
 
 export default HistoryScreen;
+// Weekly Sound Tab Component
+const WeeklySoundTab = ({ userId, weeklySelections, onSelectionMade }: { userId: string; weeklySelections: any[]; onSelectionMade: () => void }) => {
+  const [targetWeekStart, setTargetWeekStart] = useState<number>(WeeklySoundService.getLastWeekStart());
+  const [sounds, setSounds] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [entryReflectionsById, setEntryReflectionsById] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const s = await WeeklySoundService.getSoundsForWeek(userId, targetWeekStart);
+      setSounds(s);
+      // Build reflections map for this week
+      try {
+        const { weekStart, weekEnd } = WeeklySoundService.getWeekRange(targetWeekStart);
+        const entries = await MoodEntryService.getMoodEntries(userId);
+        const weekEntries = entries.filter(e => e.timestamp >= weekStart && e.timestamp <= weekEnd);
+        const map: Record<string, string> = {};
+        weekEntries.forEach(e => { map[e.entryId] = e.reflection; });
+        setEntryReflectionsById(map);
+      } catch (e) {
+        setEntryReflectionsById({});
+      }
+      setLoading(false);
+    })();
+  }, [userId, targetWeekStart]);
+
+  const weekLabel = WeeklySoundService.formatWeekRange(targetWeekStart);
+  const isWindowOpen = WeeklySoundService.isSelectionWindowOpen(targetWeekStart);
+  const currentSelection = weeklySelections.find((w: any) => w.weekStart === targetWeekStart);
+  const selectedSound = currentSelection ? sounds.find((s: any) => s.musicId === currentSelection.selectedMusicId) : null;
+
+  const handleSelect = (musicId: string) => {
+    if (!isWindowOpen) {
+      Alert.alert('Selection Window Closed', 'You can select a Sound of the Week only during the week after it ends.');
+      return;
+    }
+    Alert.alert('Confirm Selection', `Set this as your Sound of Week ${weekLabel}?`, [
+      { text: 'Cancel' },
+      { text: 'Confirm', onPress: async () => { await WeeklySoundService.saveWeeklySelection(userId, targetWeekStart, musicId); onSelectionMade(); } }
+    ]);
+  };
+
+  const navigateWeeks = (delta: number) => {
+    setTargetWeekStart(prev => prev + delta * 7 * 24 * 60 * 60 * 1000);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <TouchableOpacity onPress={() => navigateWeeks(-1)}><Text>{'<'}</Text></TouchableOpacity>
+        <Text style={{ fontWeight: '600' }}>{weekLabel}</Text>
+        <TouchableOpacity onPress={() => navigateWeeks(1)}><Text>{'>'}</Text></TouchableOpacity>
+      </View>
+      {!currentSelection && (
+        <Text style={{ marginBottom: 8, color: isWindowOpen ? '#2E7D32' : '#777' }}>
+          {isWindowOpen ? 'Selection window is open' : 'Selection window is closed'}
+        </Text>
+      )}
+      {currentSelection && selectedSound && (
+        <View style={{ padding: 10, marginBottom: 8, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
+          <Text style={{ fontWeight: '500', marginBottom: 6 }}>Your Sound of the Week</Text>
+          {entryReflectionsById[selectedSound.entryId] ? (
+            <Text style={{ marginBottom: 8, color: '#555' }}>Reflection: {entryReflectionsById[selectedSound.entryId]}</Text>
+          ) : null}
+          <MusicPlayer musicId={selectedSound.musicId} userId={userId} onError={() => {}} />
+        </View>
+      )}
+      {loading ? (
+        <Text>Loading sounds...</Text>
+      ) : sounds.length === 0 ? (
+        <Text>No sounds generated in this week.</Text>
+      ) : (!currentSelection) ? (
+        <View>
+          {sounds.map((sound: any) => (
+            <View key={sound.musicId} style={{ padding: 10, marginBottom: 8, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
+              <Text style={{ fontWeight: '500', marginBottom: 6 }}>Generated: {new Date(sound.generatedAt).toLocaleString()}</Text>
+              {entryReflectionsById[sound.entryId] ? (
+                <Text style={{ marginBottom: 8, color: '#555' }}>Reflection: {entryReflectionsById[sound.entryId]}</Text>
+              ) : null}
+              <MusicPlayer musicId={sound.musicId} userId={userId} onError={() => {}} />
+              <TouchableOpacity style={{ backgroundColor: '#4a90e2', padding: 10, borderRadius: 6, marginTop: 6, alignItems: 'center' }} onPress={() => handleSelect(sound.musicId)}>
+                <Text style={{ color: 'white', fontWeight: '600' }}>Select as Sound of the Week</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {/* Selections Overview removed per design */}
+    </ScrollView>
+  );
+};

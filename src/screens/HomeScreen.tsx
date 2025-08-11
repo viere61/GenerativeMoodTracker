@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Button, ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Button, ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -7,6 +7,7 @@ import { TimeWindowValidator } from '../utils/TimeWindowValidator';
 import TimeWindowService from '../services/TimeWindowService';
 import PushNotificationService from '../services/PushNotificationService';
 import TimeWindowCountdown from '../components/TimeWindowCountdown';
+import WeeklySoundService from '../services/WeeklySoundService';
 import UserPreferencesService from '../services/UserPreferencesService';
 // import MusicDebugPanel from '../components/MusicDebugPanel';
 import MoodEntryService from '../services/MoodEntryService';
@@ -186,6 +187,8 @@ const HomeScreen = () => {
     await checkTimeWindow();
     setRefreshing(false);
   };
+
+  // Sound of the Week shortcut removed per request
 
   // Handle countdown completion
   const handleCountdownComplete = async () => {
@@ -404,6 +407,7 @@ const HomeScreen = () => {
             title="Log Your Mood"
             onPress={() => navigation.navigate('MoodEntry')}
           />
+          
         </View>
       ) : (
         <View style={styles.windowClosed}>
@@ -427,6 +431,7 @@ const HomeScreen = () => {
               </Text>
             </View>
           )}
+          
         </View>
       )}
 

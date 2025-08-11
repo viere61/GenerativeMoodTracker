@@ -13,13 +13,13 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 // Define navigation types
 export type RootStackParamList = {
   Onboarding: undefined;
-  Main: { screen?: keyof MainTabParamList } | undefined;
+  Main: { screen?: keyof MainTabParamList; params?: MainTabParamList[keyof MainTabParamList] } | undefined;
   MoodEntry: undefined;
 };
 
 export type MainTabParamList = {
   Home: undefined;
-  History: undefined;
+  History: { initialHistoryTab?: 'list' | 'charts' | 'weekly' } | undefined;
   Settings: undefined;
 };
 
