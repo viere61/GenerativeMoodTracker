@@ -18,6 +18,7 @@ export interface UserPreferences {
   audioQuality: string;
   customEmotionTags?: string[];
   customInfluenceTags?: string[];
+  timeFormat?: '12h' | '24h';
   [key: string]: any; // Allow for additional preferences
 }
 
@@ -112,6 +113,7 @@ class UserPreferencesService {
       audioQuality: 'high',
       customEmotionTags: [],
       customInfluenceTags: [],
+      timeFormat: '12h',
     };
   }
   

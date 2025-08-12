@@ -25,7 +25,8 @@ export const useUserPreferences = () => {
           const defaultPreferences = await UserPreferencesService.initializePreferences(
             userId,
             {
-              preferredTimeRange: { start: '09:00', end: '21:00' }
+              preferredTimeRange: { start: '09:00', end: '21:00' },
+              timeFormat: '12h'
             }
           );
           setPreferences(defaultPreferences);

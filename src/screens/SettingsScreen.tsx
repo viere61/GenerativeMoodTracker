@@ -1,26 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, Button, Alert, Modal, TextInput, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Switch, Button, Alert, ScrollView } from 'react-native';
 import DataExportModal from '../components/DataExportModal';
-import PushNotificationSettings from '../components/PushNotificationSettings';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
-import PushNotificationService from '../services/PushNotificationService';
 import MoodEntryService from '../services/MoodEntryService';
-import { AntDesign } from '@expo/vector-icons';
 
 const SettingsScreen = () => {
   // State for modals
   const [exportModalVisible, setExportModalVisible] = useState(false);
-  const [timeRangeModalVisible, setTimeRangeModalVisible] = useState(false);
-  // Removed privacy settings modal
-  
-  // State for time range inputs
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('21:00');
-  
-  // State for accordion open/close
-  const [emailAccordionOpen, setEmailAccordionOpen] = useState(false);
-  const [pushAccordionOpen, setPushAccordionOpen] = useState(false);
   
   // Use demo user for web compatibility
   const userId = 'demo-user';
@@ -30,19 +17,8 @@ const SettingsScreen = () => {
     preferences, 
     isLoading, 
     error, 
-    updatePreference, 
-    updatePreferredTimeRange 
+    updatePreference
   } = useUserPreferences();
-  
-  // Initialize state from preferences
-  useEffect(() => {
-    if (preferences) {
-      if (preferences.preferredTimeRange) {
-        setStartTime(preferences.preferredTimeRange.start);
-        setEndTime(preferences.preferredTimeRange.end);
-      }
-    }
-  }, [preferences]);
   
   // Handle reset daily log status
   const handleResetDailyLog = async () => {
@@ -58,39 +34,6 @@ const SettingsScreen = () => {
     } catch (error) {
       console.error('Reset daily log error:', error);
       Alert.alert('Error', 'Failed to reset daily log status');
-    }
-  };
-  
-  // Handle notifications toggle
-  const handleNotificationsToggle = async (value: boolean) => {
-    try {
-      if (!userId) {
-        Alert.alert('Error', 'User not authenticated');
-        return;
-      }
-      
-      // Update the preference
-      await updatePreference('notifications', value);
-      
-      // If enabling notifications, request permissions
-      if (value) {
-        const permissionsGranted = await PushNotificationService.getInstance().getPermissionsStatus();
-        if (!permissionsGranted) {
-          Alert.alert(
-            'Notification Permission Required',
-            'Please enable notifications in your device settings to receive mood logging reminders.',
-            [{ text: 'OK' }]
-          );
-          // Revert the preference if permissions were denied
-          await updatePreference('notifications', false);
-        }
-      } else {
-        // If disabling, cancel all scheduled notifications
-        await PushNotificationService.getInstance().cancelAllMoodReminders();
-      }
-    } catch (error) {
-      console.error('Notifications toggle error:', error);
-      Alert.alert('Error', 'Failed to update notification settings');
     }
   };
   
@@ -110,65 +53,18 @@ const SettingsScreen = () => {
     }
   };
   
-  // Handle audio quality toggle
-  const handleAudioQualityToggle = async (value: boolean) => {
+  // Time format toggle handler
+  const handleTimeFormatToggle = async (value: boolean) => {
     try {
-      if (!userId) {
-        Alert.alert('Error', 'User not authenticated');
-        return;
-      }
-      
-      // Update the preference
-      await updatePreference('audioQuality', value ? 'high' : 'standard');
+      const format = value ? '12h' : '24h';
+      await updatePreference('timeFormat', format);
     } catch (error) {
-      console.error('Audio quality toggle error:', error);
-      Alert.alert('Error', 'Failed to update audio quality settings');
+      console.error('Time format toggle error:', error);
+      Alert.alert('Error', 'Failed to update time format');
     }
   };
   
-  // Handle time range update
-  const handleTimeRangeUpdate = async () => {
-    try {
-      // Validate time format
-      const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-      if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
-        Alert.alert('Invalid Time Format', 'Please use the format HH:MM (24-hour)');
-        return;
-      }
-      
-      // Validate start time is before end time
-      const [startHour, startMinute] = startTime.split(':').map(Number);
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      
-      const startMinutes = startHour * 60 + startMinute;
-      const endMinutes = endHour * 60 + endMinute;
-      
-      if (startMinutes >= endMinutes) {
-        Alert.alert('Invalid Time Range', 'Start time must be before end time');
-        return;
-      }
-      
-      // Must have at least 1 hour difference for the window
-      if (endMinutes - startMinutes < 60) {
-        Alert.alert('Invalid Time Range', 'Time range must be at least 1 hour');
-        return;
-      }
-      
-      // Update the time range
-      await updatePreferredTimeRange({ start: startTime, end: endTime });
-      
-      // Reset the daily window to apply the new time range
-      await TimeWindowService.resetWindow(userId);
-      
-      // Close the modal
-      setTimeRangeModalVisible(false);
-      
-      Alert.alert('Success', 'Time range updated successfully');
-    } catch (error) {
-      console.error('Time range update error:', error);
-      Alert.alert('Error', 'Failed to update time range');
-    }
-  };
+  // Time range settings removed
   
   // Handle sign out (demo mode - just show message)
   // Sign out removed in simplified settings
@@ -179,58 +75,25 @@ const SettingsScreen = () => {
   // Handle privacy settings update
   // Privacy settings removed
   
-  // Handle test notification
-  const handleTestNotification = async () => {
-    try {
-      const sent = await PushNotificationService.getInstance().sendTestNotification('Test', 'This is a test notification');
-      if (sent) {
-        Alert.alert('Success', 'Test notification sent');
-      } else {
-        Alert.alert('Error', 'Failed to send test notification');
-      }
-    } catch (error) {
-      console.error('Test notification error:', error);
-      Alert.alert('Error', 'Failed to send test notification');
-    }
-  };
+  // Test notification removed
   
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Settings</Text>
       
-      {/* Time Preferences Section */}
+      {/* Time Format Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Time Preferences</Text>
-        <Button 
-          title="Change Preferred Time Range" 
-          onPress={() => setTimeRangeModalVisible(true)}
-        />
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Current Range:</Text>
-          <Text style={styles.infoValue}>
-            {preferences?.preferredTimeRange ? 
-              `${preferences.preferredTimeRange.start} - ${preferences.preferredTimeRange.end}` : 
-              'Loading...'}
-          </Text>
-        </View>
-      </View>
-      
-      {/* Notifications Section (kept for push only) */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Push Notifications</Text>
+        <Text style={styles.sectionTitle}>Time Format</Text>
         <View style={styles.settingRow}>
-          <Text>Enable Push Notifications</Text>
+          <Text>Use 12-hour format</Text>
           <Switch
-            value={preferences?.notifications ?? true}
-            onValueChange={handleNotificationsToggle}
+            value={(preferences?.timeFormat ?? '12h') === '12h'}
+            onValueChange={handleTimeFormatToggle}
           />
         </View>
-        <View style={styles.spacer} />
-        <Button 
-          title="Send Test Notification" 
-          onPress={handleTestNotification}
-          disabled={!(preferences?.notifications ?? true)}
-        />
+        <Text style={{ marginTop: 8, color: '#666' }}>
+          Currently displaying times in {(preferences?.timeFormat ?? '12h') === '12h' ? '12-hour' : '24-hour'} format.
+        </Text>
       </View>
 
       {/* Email notifications removed */}
@@ -260,56 +123,7 @@ const SettingsScreen = () => {
         
       </View>
       
-      {/* Time Range Modal */}
-      <Modal
-        visible={timeRangeModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setTimeRangeModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Set Preferred Time Range</Text>
-            <Text style={styles.modalDescription}>
-              Set the time range during which your daily mood logging window will be randomly selected.
-            </Text>
-            
-            <View style={styles.inputRow}>
-              <Text style={styles.inputLabel}>Start Time (24h):</Text>
-              <TextInput
-                style={styles.timeInput}
-                value={startTime}
-                onChangeText={setStartTime}
-                placeholder="09:00"
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-              />
-            </View>
-            
-            <View style={styles.inputRow}>
-              <Text style={styles.inputLabel}>End Time (24h):</Text>
-              <TextInput
-                style={styles.timeInput}
-                value={endTime}
-                onChangeText={setEndTime}
-                placeholder="21:00"
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-              />
-            </View>
-            
-            <Text style={styles.modalNote}>
-              Note: The app will select a random 1-hour window within this range each day.
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <Button title="Cancel" onPress={() => setTimeRangeModalVisible(false)} />
-              <View style={styles.buttonSpacer} />
-              <Button title="Save" onPress={handleTimeRangeUpdate} />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Time Range Modal removed */}
       
       {/* Account Management Modal - Disabled in demo mode */}
       

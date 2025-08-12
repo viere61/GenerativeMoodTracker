@@ -32,6 +32,21 @@ const HomeScreen = () => {
     canLog: false,
     message: 'Set your preferred time range to get started',
   });
+  const [hour12, setHour12] = useState<boolean>(true);
+
+  const formatTime = (hhmm: string, use12h: boolean): string => {
+    if (!hhmm) return '';
+    const [hStr, mStr] = hhmm.split(':');
+    const hour = parseInt(hStr, 10);
+    const minute = parseInt(mStr, 10) || 0;
+    if (!use12h) {
+      return `${hStr}:${mStr.padStart(2, '0')}`;
+    }
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const hour12val = hour % 12 === 0 ? 12 : hour % 12;
+    const minuteStr = mStr.padStart(2, '0');
+    return `${hour12val}:${minuteStr} ${period}`;
+  };
 
   const pushNotificationService = PushNotificationService.getInstance();
 
@@ -64,6 +79,7 @@ const HomeScreen = () => {
         // Set times from preferences
         setStartTime(preferences.preferredTimeRange.start);
         setEndTime(preferences.preferredTimeRange.end);
+        setHour12((preferences.timeFormat ?? '12h') === '12h');
 
         // Check time window status
         await checkTimeWindow();
@@ -176,6 +192,14 @@ const HomeScreen = () => {
   // Check time window when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      // Refresh preferences to reflect time format toggles made in Settings
+      (async () => {
+        const prefs = await UserPreferencesService.getPreferences('demo-user');
+        if (prefs) {
+          setHour12((prefs.timeFormat ?? '12h') === '12h');
+        }
+      })();
+
       // Just check the time window status without sending any notifications
       checkTimeWindow();
     }, [checkTimeWindow])
@@ -291,7 +315,7 @@ const HomeScreen = () => {
       {/* Current Time Range Display */}
       <View style={styles.timeRangeDisplay}>
         <Text style={styles.timeRangeLabel}>Current Time Range:</Text>
-        <Text style={styles.timeRangeText}>{startTime} - {endTime}</Text>
+        <Text style={styles.timeRangeText}>{formatTime(startTime, hour12)} - {formatTime(endTime, hour12)}</Text>
         <TouchableOpacity
           style={styles.editTimeButton}
           onPress={() => setShowTimeRangeSelector(!showTimeRangeSelector)}
@@ -330,7 +354,7 @@ const HomeScreen = () => {
                         styles.timeButtonText,
                         startTime === time && styles.selectedTimeButtonText
                       ]}>
-                        {time}
+                         {formatTime(time, hour12)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -359,7 +383,7 @@ const HomeScreen = () => {
                         styles.timeButtonText,
                         endTime === time && styles.selectedTimeButtonText
                       ]}>
-                        {time}
+                         {formatTime(time, hour12)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -369,7 +393,7 @@ const HomeScreen = () => {
           </View>
 
           <Text style={styles.selectedRange}>
-            Your window will be between {startTime} and {endTime}
+            Your window will be between {formatTime(startTime, hour12)} and {formatTime(endTime, hour12)}
           </Text>
 
           <TouchableOpacity
@@ -401,7 +425,7 @@ const HomeScreen = () => {
         <View style={styles.windowOpen}>
           <Text style={styles.windowText}>Your mood logging window is open!</Text>
                       <Text style={styles.windowTimeText}>
-              Available until {timeWindowStatus.windowEnd ? new Date(timeWindowStatus.windowEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+              Available until {timeWindowStatus.windowEnd ? new Date(timeWindowStatus.windowEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 }) : ''}
             </Text>
           <Button
             title="Log Your Mood"
@@ -426,7 +450,7 @@ const HomeScreen = () => {
           {timeWindowStatus.windowStart && timeWindowStatus.windowEnd && (
             <View style={styles.nextWindowInfo}>
               <Text style={styles.nextWindowText}>
-                Next window opens at {new Date(timeWindowStatus.windowStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                Next window opens at {new Date(timeWindowStatus.windowStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 })}
                 {new Date(timeWindowStatus.windowStart).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
               </Text>
             </View>
