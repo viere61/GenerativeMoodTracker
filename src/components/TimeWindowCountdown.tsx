@@ -6,6 +6,7 @@ interface TimeWindowCountdownProps {
   nextWindowTime: number;
   onCountdownComplete?: () => void;
   windowEndTime?: number;
+  hour12?: boolean;
 }
 
 /**
@@ -14,7 +15,8 @@ interface TimeWindowCountdownProps {
 const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({ 
   nextWindowTime,
   onCountdownComplete,
-  windowEndTime
+  windowEndTime,
+  hour12 = true
 }) => {
   const [timeRemaining, setTimeRemaining] = useState({ hours: 0, minutes: 0 });
   const [isComplete, setIsComplete] = useState(false);
@@ -174,30 +176,30 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
       const isTomorrow = new Date(nextWindowTime).toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
       
       if (isToday) {
-        return `Next window opens at ${formatTime(nextWindowTime)} today`;
+       return `Next window opens at ${formatTime(nextWindowTime, hour12)} today`;
       } else if (isTomorrow) {
-        return `Next window opens at ${formatTime(nextWindowTime)} tomorrow`;
+       return `Next window opens at ${formatTime(nextWindowTime, hour12)} tomorrow`;
       } else {
         const nextDate = new Date(nextWindowTime);
-        return `Next window opens ${nextDate.toLocaleDateString()} at ${formatTime(nextWindowTime)}`;
+        return `Next window opens ${nextDate.toLocaleDateString()} at ${formatTime(nextWindowTime, hour12)}`;
       }
     }
     
     // Check if window is currently open
     if (isComplete && currentTime >= nextWindowTime && (!windowEndTime || currentTime <= windowEndTime)) {
-      return windowEndTime ? `Available until ${formatTime(windowEndTime)}` : 'Available now';
+      return windowEndTime ? `Available until ${formatTime(windowEndTime, hour12)}` : 'Available now';
     } else if (!isComplete) {
       // Check if the next window is today or tomorrow
       const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
       const isTomorrow = new Date(nextWindowTime).toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
       
       if (isToday) {
-        return `Opens at ${formatTime(nextWindowTime)} today`;
+        return `Opens at ${formatTime(nextWindowTime, hour12)} today`;
       } else if (isTomorrow) {
-        return `Opens at ${formatTime(nextWindowTime)} tomorrow`;
+        return `Opens at ${formatTime(nextWindowTime, hour12)} tomorrow`;
       } else {
         const nextDate = new Date(nextWindowTime);
-        return `Opens ${nextDate.toLocaleDateString()} at ${formatTime(nextWindowTime)}`;
+        return `Opens ${nextDate.toLocaleDateString()} at ${formatTime(nextWindowTime, hour12)}`;
       }
     }
     return '';

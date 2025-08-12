@@ -142,8 +142,8 @@ export const isWithinWindow = (windowStart: number, windowEnd: number): boolean 
  * @param timestamp The timestamp to format
  * @returns Formatted time string (e.g., "9:00 AM")
  */
-export const formatTime = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+export const formatTime = (timestamp: number, hour12: boolean = true): string => {
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 });
 };
 
 /**

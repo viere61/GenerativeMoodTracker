@@ -177,6 +177,8 @@ class TimeWindowService {
   }> {
     try {
       const window = await this.getCurrentWindow(userId);
+      const prefs = await UserPreferencesService.getPreferences(userId);
+      const hour12 = (prefs?.timeFormat ?? '12h') === '12h';
       
       // Check if already logged today
       if (window.hasLogged) {
@@ -193,7 +195,7 @@ class TimeWindowService {
       if (withinWindow) {
         return {
           canLog: true,
-          message: `You can log your mood until ${formatTime(window.windowEnd)}.`,
+          message: `You can log your mood until ${formatTime(window.windowEnd, hour12)}.`,
           window
         };
       }
@@ -206,7 +208,7 @@ class TimeWindowService {
         const { hours, minutes } = getTimeUntil(window.windowStart);
         return {
           canLog: false,
-          message: `Your mood logging window starts in ${hours} hours and ${minutes} minutes at ${formatTime(window.windowStart)}.`,
+          message: `Your mood logging window starts in ${hours} hours and ${minutes} minutes at ${formatTime(window.windowStart, hour12)}.`,
           window
         };
       } else {

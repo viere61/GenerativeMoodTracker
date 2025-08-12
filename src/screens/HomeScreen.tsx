@@ -101,6 +101,27 @@ const HomeScreen = () => {
   // Function to update time range preferences
   const updateTimeRange = async (newStartTime: string, newEndTime: string) => {
     try {
+      // Validate: start < end and at least 2 hours apart
+      const [sH, sM] = newStartTime.split(':').map(Number);
+      const [eH, eM] = newEndTime.split(':').map(Number);
+      const startMinutes = sH * 60 + (sM || 0);
+      const endMinutes = eH * 60 + (eM || 0);
+
+      if (isNaN(startMinutes) || isNaN(endMinutes)) {
+        Alert.alert('Invalid Time Range', 'Please select valid start and end times.');
+        return;
+      }
+
+      if (startMinutes >= endMinutes) {
+        Alert.alert('Invalid Time Range', 'Start time must be before end time.');
+        return;
+      }
+
+      if (endMinutes - startMinutes < 120) {
+        Alert.alert('Invalid Time Range', 'Time range must be at least 2 hours (e.g., 13:00 - 15:00).');
+        return;
+      }
+
       setLoading(true);
       const userId = 'demo-user';
 
@@ -140,6 +161,7 @@ const HomeScreen = () => {
       setShowTimeRangeSelector(false);
     } catch (error) {
       console.error('Error updating time range:', error);
+      Alert.alert('Error', 'Failed to update time range. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -443,18 +465,11 @@ const HomeScreen = () => {
               nextWindowTime={timeWindowStatus.windowStart}
               windowEndTime={timeWindowStatus.windowEnd}
               onCountdownComplete={handleCountdownComplete}
+              hour12={hour12}
             />
           )}
 
-          {/* Show next window info when we have window data (either current window passed OR user already logged) */}
-          {timeWindowStatus.windowStart && timeWindowStatus.windowEnd && (
-            <View style={styles.nextWindowInfo}>
-              <Text style={styles.nextWindowText}>
-                Next window opens at {new Date(timeWindowStatus.windowStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 })}
-                {new Date(timeWindowStatus.windowStart).toDateString() !== new Date().toDateString() ? ' tomorrow' : ' today'}
-              </Text>
-            </View>
-          )}
+          {/* Removed yellow next window info per request */}
           
         </View>
       )}
