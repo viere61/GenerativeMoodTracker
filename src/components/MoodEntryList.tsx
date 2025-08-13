@@ -104,6 +104,17 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
     setMoodRangeFilter([1, 10]);
   };
 
+  // Map numeric mood rating to user-facing label (hide 1-10)
+  const getMoodLabel = (rating: number): string => {
+    if (rating >= 9) return 'Very Pleasant';
+    if (rating >= 7) return 'Pleasant';
+    if (rating === 6) return 'Slightly Pleasant';
+    if (rating === 5) return 'Neutral';
+    if (rating === 4) return 'Slightly Unpleasant';
+    if (rating >= 2) return 'Unpleasant';
+    return 'Very Unpleasant';
+  };
+
   // Format timestamp to readable date
   const formatDate = (timestamp: number) => {
     return format(new Date(timestamp), 'MMM d, yyyy h:mm a');
@@ -118,7 +129,8 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
       <Text style={styles.entryDate}>{formatDate(item.timestamp)}</Text>
       <View style={styles.entryDetails}>
         <View style={styles.ratingContainer}>
-          <Text style={styles.entryRating}>Mood: {item.moodRating}/10</Text>
+          {/* Hide explicit 1-10 scale from users */}
+          <Text style={styles.entryRating}>Mood: {getMoodLabel(item.moodRating)}</Text>
           <View 
             style={[
               styles.ratingIndicator, 

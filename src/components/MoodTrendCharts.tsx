@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator
 } from 'react-native';
-import { LineChart, BarChart } from 'react-native-chart-kit';
 import { MoodEntry } from '../types';
 import { format, subDays, eachDayOfInterval, startOfDay, endOfDay } from 'date-fns';
 
@@ -17,21 +16,24 @@ interface MoodTrendChartsProps {
   isLoading: boolean;
 }
 
-type TimeRange = '7days' | '30days' | '90days' | 'all';
-type ChartType = 'line' | 'bar';
+type TimeRange = '7days' | '30days' | '180days' | '365days';
 
 const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('7days');
-  const [chartType, setChartType] = useState<ChartType>('line');
-  const [chartData, setChartData] = useState<{
-    labels: string[];
-    datasets: { data: number[] }[];
-    emotionFrequency: { [key: string]: number };
-  }>({
-    labels: [],
-    datasets: [{ data: [] }],
+  const [chartData, setChartData] = useState<{ points: MoodEntry[]; startDate: Date; endDate: Date; emotionFrequency: { [key: string]: number } }>({
+    points: [],
+    startDate: new Date(),
+    endDate: new Date(),
     emotionFrequency: {},
   });
+  const [visibleRange, setVisibleRange] = useState<{ start: Date; end: Date } | null>(null);
+
+  // Local helper to color-code points by mood level
+  const getMoodColor = (rating: number): string => {
+    if (rating >= 8) return '#4CAF50'; // high mood
+    if (rating >= 5) return '#FFC107'; // medium mood
+    return '#F44336'; // low mood
+  };
 
   const screenWidth = Dimensions.get('window').width - 60; // More conservative padding for mobile
 
@@ -42,7 +44,7 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
     processChartData();
   }, [entries, timeRange]);
 
-  // Process the chart data based on selected time range
+  // Process the chart data based on selected time range (scatter of individual entries)
   const processChartData = () => {
     // Get the date range based on selected time range
     const endDate = new Date();
@@ -55,71 +57,34 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
       case '30days':
         startDate = subDays(endDate, 29); // Last 30 days including today
         break;
-      case '90days':
-        startDate = subDays(endDate, 89); // Last 90 days including today
+      case '180days':
+        startDate = subDays(endDate, 179); // Last 6 months (~180 days)
         break;
-      case 'all':
+      case '365days':
+        startDate = subDays(endDate, 364); // Last year
+        break;
       default:
-        // Find the earliest entry date
-        const timestamps = entries.map(entry => entry.timestamp);
-        startDate = new Date(Math.min(...timestamps));
+        startDate = subDays(endDate, 29);
         break;
     }
     
     // Set start date to beginning of day
     startDate = startOfDay(startDate);
     
-    // Generate all days in the range
-    const daysInRange = eachDayOfInterval({ start: startDate, end: endDate });
-    
-    // Initialize data arrays
-    const labels: string[] = [];
-    const moodData: number[] = [];
+    // Collect points within range (use individual entries)
+    const startTs = startDate.getTime();
+    const endTs = endOfDay(endDate).getTime();
+    const points = entries.filter(e => e.timestamp >= startTs && e.timestamp <= endTs);
+
+    // Emotion frequency for the period
     const emotionFrequency: { [key: string]: number } = {};
-    
-    // Process each day
-    daysInRange.forEach(day => {
-      // Format the label based on the time range
-      let label: string;
-      if (timeRange === '7days') {
-        label = format(day, 'EEE'); // Mon, Tue, etc.
-      } else {
-        label = format(day, 'MMM d'); // Jan 1, Feb 2, etc.
-      }
-      labels.push(label);
-      
-      // Find entries for this day
-      const dayStart = startOfDay(day).getTime();
-      const dayEnd = endOfDay(day).getTime();
-      
-      const dayEntries = entries.filter(
-        entry => entry.timestamp >= dayStart && entry.timestamp <= dayEnd
-      );
-      
-      // Calculate average mood for the day
-      if (dayEntries.length > 0) {
-        const totalMood = dayEntries.reduce((sum, entry) => sum + entry.moodRating, 0);
-        const avgMood = totalMood / dayEntries.length;
-        moodData.push(avgMood);
-        
-        // Count emotions
-        dayEntries.forEach(entry => {
-          entry.emotionTags.forEach(emotion => {
-            emotionFrequency[emotion] = (emotionFrequency[emotion] || 0) + 1;
-          });
-        });
-      } else {
-        // No entries for this day
-        moodData.push(0); // Use 0 to indicate no data
-      }
+    points.forEach(entry => {
+      entry.emotionTags.forEach(emotion => {
+        emotionFrequency[emotion] = (emotionFrequency[emotion] || 0) + 1;
+      });
     });
-    
-    // Update chart data
-    setChartData({
-      labels,
-      datasets: [{ data: moodData }],
-      emotionFrequency,
-    });
+
+    setChartData({ points, startDate, endDate, emotionFrequency });
   };
 
   // Get top emotions
@@ -129,86 +94,133 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
       .slice(0, 5); // Get top 5 emotions
   };
 
-  // Render the chart based on selected type
+  // Render a custom scatter chart similar to the provided design
   const renderChart = () => {
-    // Filter out days with no data (0 values)
-    const filteredData = {
-      labels: chartData.labels.filter((_, i) => chartData.datasets[0].data[i] !== 0),
-      datasets: [
-        {
-          data: chartData.datasets[0].data.filter(value => value !== 0),
-          color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-    };
-    
-    // If no data after filtering, show empty state
-    if (filteredData.labels.length === 0) {
+    const { points, startDate, endDate } = chartData;
+    if (points.length === 0) {
       return (
         <View style={styles.emptyChartContainer}>
           <Text style={styles.emptyChartText}>No mood data available for this time range</Text>
         </View>
       );
     }
+
+    const startTs = startOfDay(startDate).getTime();
+    const endTs = endOfDay(endDate).getTime();
+    const span = Math.max(1, endTs - startTs);
+    const totalWidth = screenWidth; // Always fit within the screen width
+    const totalHeight = 240;
+    const leftPadding = 16;
+    const rightPadding = 100; // space for y-axis labels (tighter to give plot more room)
+    const topPadding = 12;
+    const bottomPadding = 24; // space for x ticks
+
+    const plotWidth = totalWidth - leftPadding - rightPadding;
+    const plotHeight = totalHeight - topPadding - bottomPadding;
+
+    const minY = 1;
+    const maxY = 10;
+
+    const toX = (ts: number) => leftPadding + ((ts - startTs) / span) * plotWidth;
+    const toY = (rating: number) => topPadding + (1 - (rating - minY) / (maxY - minY)) * plotHeight;
+
+    // Build a few vertical tick marks (4)
+    const ticks = [0.2, 0.4, 0.6, 0.8];
+    const tickLabels = ticks.map(t => {
+      const ts = startTs + t * span;
+      const days = span / (24 * 60 * 60 * 1000);
+      if (days > 120) {
+        return format(new Date(ts), 'MMM');
+      }
+      return format(new Date(ts), 'd');
+    });
+
+    const axisLabelLeft = leftPadding + plotWidth + 10; // slight left shift to avoid clipping
+    const viewportPlotWidth = Math.min(plotWidth, screenWidth - leftPadding - rightPadding);
     
-    const chartConfig = {
-      backgroundGradientFrom: '#ffffff',
-      backgroundGradientTo: '#ffffff',
-      decimalPlaces: 1,
-      color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-      style: {
-        borderRadius: 16,
-      },
-      propsForDots: {
-        r: '6',
-        strokeWidth: '2',
-        stroke: '#4a90e2',
-      },
+    const handleScroll = (x: number) => {
+      const leftPlotX = Math.max(leftPadding, Math.min(leftPadding + plotWidth - viewportPlotWidth, x + leftPadding));
+      const leftFraction = (leftPlotX - leftPadding) / plotWidth;
+      const viewStartTs = startTs + leftFraction * span;
+      const viewEndTs = viewStartTs + (viewportPlotWidth / plotWidth) * span;
+      setVisibleRange({ start: new Date(viewStartTs), end: new Date(viewEndTs) });
     };
-    
-    if (chartType === 'line') {
-      return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <LineChart
-            data={filteredData}
-            width={Math.max(screenWidth, filteredData.labels.length * 50)} // Ensure minimum width per data point
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chart}
-            fromZero
-            yAxisSuffix=""
-            yAxisLabel=""
-            yAxisInterval={1}
-            segments={5}
-          />
-        </ScrollView>
-      );
-    } else {
-      return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <BarChart
-            data={filteredData}
-            width={Math.max(screenWidth, filteredData.labels.length * 50)} // Ensure minimum width per data point
-            height={220}
-            chartConfig={chartConfig}
-            style={styles.chart}
-            fromZero
-            yAxisSuffix=""
-            yAxisLabel=""
-            showBarTops={false}
-          />
-        </ScrollView>
-      );
-    }
+
+    return (
+      <ScrollView horizontal={false}>
+        <View style={[styles.scatterContainer, { width: totalWidth, height: totalHeight }]}
+          accessibilityLabel="Mood scatter chart"
+        >
+          {/* Grid: horizontal lines at top/middle/bottom */}
+          {[0, 0.5, 1].map((p, idx) => (
+            <View key={`h-${idx}`} style={{
+              position: 'absolute',
+              left: leftPadding,
+              right: rightPadding,
+              top: topPadding + p * plotHeight,
+              height: 1,
+              backgroundColor: '#e5e5e5'
+            }} />
+          ))}
+
+          {/* Vertical tick lines */}
+          {ticks.map((t, idx) => (
+            <View key={`v-${idx}`} style={{
+              position: 'absolute',
+              top: topPadding,
+              bottom: bottomPadding,
+              left: leftPadding + t * plotWidth,
+              width: 1,
+              backgroundColor: '#eeeeee'
+            }} />
+          ))}
+
+          {/* Points */}
+          {points.map((p, i) => (
+            <View key={p.entryId || i} style={{
+              position: 'absolute',
+              left: toX(p.timestamp) - 6,
+              top: toY(p.moodRating) - 6,
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              backgroundColor: getMoodColor(p.moodRating),
+              borderWidth: 2,
+              borderColor: 'white',
+              shadowColor: '#000',
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              shadowOffset: { width: 0, height: 1 },
+            }} />
+          ))}
+
+          {/* Y-axis labels on the right side of plot */}
+          <Text style={[styles.axisYLabel, { left: axisLabelLeft, top: topPadding - 10, width: rightPadding - 12 }]}>
+            {`Very\nPleasant`}
+          </Text>
+          <Text style={[styles.axisYLabel, { left: axisLabelLeft, top: topPadding + (plotHeight / 2) - 12, width: rightPadding - 12 }]}>Neutral</Text>
+          <Text style={[styles.axisYLabel, { left: axisLabelLeft, top: topPadding + plotHeight - 18, width: rightPadding - 12 }]}>
+            {`Very\nUnpleasant`}
+          </Text>
+
+          {/* X tick labels */}
+          {ticks.map((t, idx) => (
+            <Text key={`t-${idx}`} style={{
+              position: 'absolute',
+              top: topPadding + plotHeight + 6,
+              left: leftPadding + t * plotWidth - 8,
+              fontSize: 10,
+              color: '#999'
+            }}>{tickLabels[idx]}</Text>
+          ))}
+        </View>
+      </ScrollView>
+    );
   };
 
-  // Render emotion frequency chart
+  // Render emotion frequency as a simple list with progress bars (no BarChart)
   const renderEmotionFrequencyChart = () => {
     const topEmotions = getTopEmotions();
-    
     if (topEmotions.length === 0) {
       return (
         <View style={styles.emptyChartContainer}>
@@ -216,42 +228,23 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
         </View>
       );
     }
-    
-    const emotionData = {
-      labels: topEmotions.map(([emotion]) => emotion),
-      datasets: [
-        {
-          data: topEmotions.map(([_, count]) => count),
-          color: (opacity = 1) => `rgba(134, 65, 244, ${opacity})`,
-        },
-      ],
-    };
-    
-    const chartConfig = {
-      backgroundGradientFrom: '#ffffff',
-      backgroundGradientTo: '#ffffff',
-      decimalPlaces: 0,
-      color: (opacity = 1) => `rgba(134, 65, 244, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-      style: {
-        borderRadius: 16,
-      },
-    };
-    
+
+    const maxCount = Math.max(...topEmotions.map(([, count]) => count));
+
     return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <BarChart
-          data={emotionData}
-          width={Math.max(screenWidth, topEmotions.length * 80)} // Ensure minimum width per emotion
-          height={220}
-          chartConfig={chartConfig}
-          style={styles.chart}
-          fromZero
-          yAxisSuffix=""
-          yAxisLabel=""
-          showBarTops={false}
-        />
-      </ScrollView>
+      <View>
+        {topEmotions.map(([emotion, count]) => (
+          <View key={emotion} style={{ marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 14 }}>{emotion}</Text>
+              <Text style={{ fontSize: 12, color: '#666' }}>{count}</Text>
+            </View>
+            <View style={{ height: 8, backgroundColor: '#eee', borderRadius: 4, overflow: 'hidden', marginTop: 6 }}>
+              <View style={{ width: `${(count / maxCount) * 100}%`, backgroundColor: '#8641f4', height: '100%' }} />
+            </View>
+          </View>
+        ))}
+      </View>
     );
   };
 
@@ -277,6 +270,14 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
     <ScrollView style={styles.container}>
       <View style={styles.chartContainer}>
         <Text style={styles.chartTitle}>Mood Trends</Text>
+        <Text style={{ color: '#666', marginBottom: 8 }}>
+          {`${chartData.points.length} entries`}
+        </Text>
+        <Text style={{ color: '#999', marginBottom: 12 }}>
+          {visibleRange
+            ? `${format(visibleRange.start, 'MMM d')} – ${format(visibleRange.end, 'MMM d, yyyy')}`
+            : `${format(chartData.startDate, 'MMM d')} – ${format(chartData.endDate, 'MMM d, yyyy')}`}
+        </Text>
         
         <View style={styles.controlsContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -285,94 +286,32 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
                 style={[styles.timeRangeButton, timeRange === '7days' && styles.activeButton]}
                 onPress={() => setTimeRange('7days')}
               >
-                <Text style={timeRange === '7days' ? styles.activeButtonText : styles.buttonText}>
-                  7 Days
-                </Text>
+                <Text style={timeRange === '7days' ? styles.activeButtonText : styles.buttonText}>W</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.timeRangeButton, timeRange === '30days' && styles.activeButton]}
                 onPress={() => setTimeRange('30days')}
               >
-                <Text style={timeRange === '30days' ? styles.activeButtonText : styles.buttonText}>
-                  30 Days
-                </Text>
+                <Text style={timeRange === '30days' ? styles.activeButtonText : styles.buttonText}>M</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.timeRangeButton, timeRange === '90days' && styles.activeButton]}
-                onPress={() => setTimeRange('90days')}
+                style={[styles.timeRangeButton, timeRange === '180days' && styles.activeButton]}
+                onPress={() => setTimeRange('180days')}
               >
-                <Text style={timeRange === '90days' ? styles.activeButtonText : styles.buttonText}>
-                  90 Days
-                </Text>
+                <Text style={timeRange === '180days' ? styles.activeButtonText : styles.buttonText}>6M</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.timeRangeButton, timeRange === 'all' && styles.activeButton]}
-                onPress={() => setTimeRange('all')}
+                style={[styles.timeRangeButton, timeRange === '365days' && styles.activeButton]}
+                onPress={() => setTimeRange('365days')}
               >
-                <Text style={timeRange === 'all' ? styles.activeButtonText : styles.buttonText}>
-                  All Time
-                </Text>
+                <Text style={timeRange === '365days' ? styles.activeButtonText : styles.buttonText}>Y</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
-          
-          <View style={styles.chartTypeContainer}>
-            <TouchableOpacity
-              style={[styles.chartTypeButton, chartType === 'line' && styles.activeButton]}
-              onPress={() => setChartType('line')}
-            >
-              <Text style={chartType === 'line' ? styles.activeButtonText : styles.buttonText}>
-                Line
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.chartTypeButton, chartType === 'bar' && styles.activeButton]}
-              onPress={() => setChartType('bar')}
-            >
-              <Text style={chartType === 'bar' ? styles.activeButtonText : styles.buttonText}>
-                Bar
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
         
         {renderChart()}
-        
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {chartData.datasets[0].data.filter(v => v > 0).length}
-            </Text>
-            <Text style={styles.statLabel}>Days Logged</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {chartData.datasets[0].data.filter(v => v > 0).length > 0
-                ? (
-                    chartData.datasets[0].data.reduce((sum, val) => sum + (val > 0 ? val : 0), 0) /
-                    chartData.datasets[0].data.filter(v => v > 0).length
-                  ).toFixed(1)
-                : 'N/A'}
-            </Text>
-            <Text style={styles.statLabel}>Avg Mood</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {Math.max(...chartData.datasets[0].data) > 0
-                ? Math.max(...chartData.datasets[0].data).toFixed(1)
-                : 'N/A'}
-            </Text>
-            <Text style={styles.statLabel}>Highest</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {Math.min(...chartData.datasets[0].data.filter(v => v > 0)) > 0
-                ? Math.min(...chartData.datasets[0].data.filter(v => v > 0)).toFixed(1)
-                : 'N/A'}
-            </Text>
-            <Text style={styles.statLabel}>Lowest</Text>
-          </View>
-        </View>
+        {/* Summary stats removed per request */}
       </View>
       
       <View style={styles.chartContainer}>
@@ -467,6 +406,9 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     borderRadius: 16,
   },
+  scatterContainer: {
+    backgroundColor: '#fff',
+  },
   emptyChartContainer: {
     height: 220,
     justifyContent: 'center',
@@ -500,6 +442,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 5,
+  },
+  axisYLabel: {
+    position: 'absolute',
+    textAlign: 'left',
+    color: '#222',
+    fontSize: 14,
+    lineHeight: 16,
   },
 });
 
