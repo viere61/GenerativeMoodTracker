@@ -145,7 +145,12 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
       <Text style={styles.title}>How are you feeling?</Text>
       <Text style={styles.subtitle}>Select all emotions that apply</Text>
       
-      <ScrollView style={styles.tagsScrollView} contentContainerStyle={styles.tagsContainer}>
+      <ScrollView
+        style={styles.tagsScrollView}
+        contentContainerStyle={styles.tagsContainer}
+        nestedScrollEnabled={true}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Add custom emotion tag */}
         <View style={styles.addRow}>
           <TextInput

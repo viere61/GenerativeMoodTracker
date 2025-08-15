@@ -323,6 +323,8 @@ const MoodEntryScreen = () => {
   }
   
   // Restore the original MoodEntryScreen return (before the scroll test):
+  const [isSliding, setIsSliding] = React.useState(false);
+
   return (
     <View style={{ flex: 1 }}>
       {(Platform.OS === 'ios' || Platform.OS === 'android') ? (
@@ -335,6 +337,7 @@ const MoodEntryScreen = () => {
             contentContainerStyle={{ flexGrow: 1, padding: 20 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator
+            scrollEnabled={!isSliding}
           >
             <Text style={styles.title}>How are you feeling today?</Text>
             <View style={styles.ratingContainer}>
@@ -342,6 +345,7 @@ const MoodEntryScreen = () => {
                 value={moodRating} 
                 onChange={setMoodRating}
                 onValidationChange={setIsRatingValid}
+                onSlidingChange={setIsSliding}
               />
             </View>
             <View style={styles.emotionsContainer}>
@@ -410,6 +414,7 @@ const MoodEntryScreen = () => {
           contentContainerStyle={{ flexGrow: 1, padding: 20 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
+          scrollEnabled={!isSliding}
         >
           <Text style={styles.title}>How are you feeling today?</Text>
           <View style={styles.ratingContainer}>
@@ -417,6 +422,7 @@ const MoodEntryScreen = () => {
               value={moodRating} 
               onChange={setMoodRating}
               onValidationChange={setIsRatingValid}
+              onSlidingChange={setIsSliding}
             />
           </View>
           <View style={styles.emotionsContainer}>

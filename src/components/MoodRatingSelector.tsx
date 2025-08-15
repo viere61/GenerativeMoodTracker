@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, AccessibilityInfo } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, AccessibilityInfo, PanResponder, LayoutChangeEvent } from 'react-native';
 
 interface MoodRatingSelectorProps {
   value: number | null;
   onChange: (rating: number) => void;
   onValidationChange?: (isValid: boolean) => void;
+  onSlidingChange?: (isSliding: boolean) => void;
 }
 
 /**
@@ -16,9 +17,17 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   value,
   onChange,
   onValidationChange,
+  onSlidingChange,
 }) => {
   // Animation value for the selection indicator
   const [scaleAnim] = useState(new Animated.Value(1));
+  // Animated thumb translateX for smoother movement
+  const thumbTranslateX = useRef(new Animated.Value(0)).current;
+  const trackRef = useRef<View | null>(null);
+  const trackXRef = useRef(0);
+  const trackWidthRef = useRef(0);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const isSlidingRef = useRef(false);
   // Track if screen reader is enabled for enhanced accessibility
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   
@@ -69,6 +78,15 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     }
   }, [value, onValidationChange]);
 
+  // Update thumb position whenever value or trackWidth changes
+  useEffect(() => {
+    const width = trackWidthRef.current || trackWidth;
+    const ratio = Math.max(0, Math.min(1, ((value ?? 1) - 1) / 99));
+    const x = ratio * width - 14; // center the 28px thumb
+    const clampedX = Math.max(-14, Math.min((width || 0) - 14, isNaN(x) ? 0 : x));
+    thumbTranslateX.setValue(clampedX);
+  }, [value, thumbTranslateX, trackWidth]);
+
   // Get description based on rating
   const getRatingDescription = (rating: number | null): string => {
     if (rating === null) return 'Slide to rate your mood';
@@ -100,7 +118,7 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   // Get detailed description for accessibility
   const getDetailedDescription = (rating: number): string => getRatingDescription(rating);
   
-  // Handle rating selection with animation and haptic feedback
+  // Handle rating selection with animation (no haptics)
   const handleRatingSelect = (rating: number) => {
     // Animate the scale
     Animated.sequence([
@@ -127,6 +145,65 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     onChange(rating);
   };
 
+  const handleTrackLayout = (e: LayoutChangeEvent) => {
+    const { width } = e.nativeEvent.layout;
+    trackWidthRef.current = width;
+    setTrackWidth(width);
+    // Also measure absolute X for pageX to local conversion
+    if (trackRef.current && trackRef.current.measureInWindow) {
+      trackRef.current.measureInWindow((x) => {
+        trackXRef.current = x;
+      });
+    }
+  };
+
+  const computeRatingFromLocalX = (localX: number): number => {
+    const width = Math.max(1, trackWidthRef.current);
+    const clamped = Math.max(0, Math.min(width, localX));
+    const pct = clamped / width;
+    return Math.round(1 + pct * 99);
+  };
+
+  const startRatingRef = useRef<number>(value ?? 50);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onStartShouldSetPanResponderCapture: () => true,
+    onMoveShouldSetPanResponderCapture: () => true,
+    onPanResponderGrant: (_evt) => {
+      isSlidingRef.current = true;
+      onSlidingChange?.(true);
+      // Start from current value (do NOT jump to touch-down X)
+      startRatingRef.current = Math.max(1, Math.min(100, value ?? 50));
+    },
+    onPanResponderMove: (_evt, gestureState) => {
+      // Continue tracking even when finger leaves track bounds
+      const width = Math.max(1, trackWidthRef.current);
+      const deltaRating = (gestureState.dx / width) * 99;
+      const rating = Math.round(
+        Math.max(1, Math.min(100, startRatingRef.current + deltaRating))
+      );
+      onChange(rating);
+    },
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderRelease: (_evt, gestureState) => {
+      isSlidingRef.current = false;
+      onSlidingChange?.(false);
+      const width = Math.max(1, trackWidthRef.current);
+      const deltaRating = (gestureState.dx / width) * 99;
+      const rating = Math.round(
+        Math.max(1, Math.min(100, startRatingRef.current + deltaRating))
+      );
+      // finalize selection with subtle bounce
+      handleRatingSelect(rating);
+    },
+    onPanResponderTerminate: () => {
+      isSlidingRef.current = false;
+      onSlidingChange?.(false);
+    },
+  }), [onChange]);
+
   return (
     <View 
       style={styles.container}
@@ -147,28 +224,16 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
         </Text>
       </Animated.View>
       
-      <View style={[styles.sliderTrack, { height: 22 }]}
-        onLayout={(e) => {
-          // store width in ref via state closure using invisible state
-          (styles as any)._trackWidth = e.nativeEvent.layout.width;
-        }}
+      <View
+        ref={trackRef}
+        style={[styles.sliderTrack, { height: 22 }]}
+        onLayout={handleTrackLayout}
+        {...panResponder.panHandlers}
       >
-        <View style={[styles.sliderFill, { width: Math.max(0, ((((value ?? 1) - 1) / 99) * ((styles as any)._trackWidth || 0))), backgroundColor: getRatingColor(value ?? 1) }]} />
-        <View style={[styles.sliderThumb, { transform: [{ translateX: Math.max(0, (((value ?? 1) - 1) / 99) * ((styles as any)._trackWidth || 0)) - 14 }], borderColor: getRatingColor(value ?? 1) }]} />
+        <View style={[styles.sliderFill, { width: Math.max(0, (((value ?? 1) - 1) / 99) * (trackWidth || 0)), backgroundColor: getRatingColor(value ?? 1) }]} />
+        <Animated.View style={[styles.sliderThumb, { transform: [{ translateX: thumbTranslateX }], borderColor: getRatingColor(value ?? 1) }]} />
         {/* Rounded ends are provided by borderRadius; no extra caps */}
-        <View style={styles.touchOverlay}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderTerminationRequest={() => false}
-          onResponderGrant={(e) => {
-            const x = e.nativeEvent.locationX; const trackWidth = (styles as any)._trackWidth || 1; const pct = Math.max(0, Math.min(1, x / trackWidth)); const rating = Math.round(1 + pct * 99); handleRatingSelect(rating);
-          }}
-          onResponderMove={(e) => {
-            const x = e.nativeEvent.locationX; const trackWidth = (styles as any)._trackWidth || 1; const pct = Math.max(0, Math.min(1, x / trackWidth)); const rating = Math.round(1 + pct * 99); handleRatingSelect(rating);
-          }}
-          onResponderRelease={() => {}}
-          onResponderTerminate={() => {}}
-        />
+        <View style={styles.touchOverlay} pointerEvents="none" />
       </View>
       
       <View style={styles.scaleLabels}>
