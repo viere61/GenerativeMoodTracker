@@ -28,6 +28,8 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   const trackWidthRef = useRef(0);
   const [trackWidth, setTrackWidth] = useState(0);
   const isSlidingRef = useRef(false);
+  const touchOffsetRef = useRef(0);
+  const currentValueRef = useRef<number>(value ?? 50);
   // Track if screen reader is enabled for enhanced accessibility
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   
@@ -78,8 +80,10 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     }
   }, [value, onValidationChange]);
 
-  // Update thumb position whenever value or trackWidth changes
+  // Update thumb position whenever value or trackWidth changes (but not while sliding)
   useEffect(() => {
+    if (isSlidingRef.current) return;
+    currentValueRef.current = value ?? currentValueRef.current;
     const width = trackWidthRef.current || trackWidth;
     const ratio = Math.max(0, Math.min(1, ((value ?? 1) - 1) / 99));
     const x = ratio * width - 14; // center the 28px thumb
@@ -151,7 +155,7 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     setTrackWidth(width);
     // Also measure absolute X for pageX to local conversion
     if (trackRef.current && trackRef.current.measureInWindow) {
-      trackRef.current.measureInWindow((x) => {
+      trackRef.current.measureInWindow((x: number) => {
         trackXRef.current = x;
       });
     }
@@ -171,30 +175,41 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     onMoveShouldSetPanResponder: () => true,
     onStartShouldSetPanResponderCapture: () => true,
     onMoveShouldSetPanResponderCapture: () => true,
-    onPanResponderGrant: (_evt) => {
+    onPanResponderGrant: (evt) => {
       isSlidingRef.current = true;
       onSlidingChange?.(true);
-      // Start from current value (do NOT jump to touch-down X)
-      startRatingRef.current = Math.max(1, Math.min(100, value ?? 50));
-    },
-    onPanResponderMove: (_evt, gestureState) => {
-      // Continue tracking even when finger leaves track bounds
+      // Start from current value, but preserve finger offset to avoid jump
       const width = Math.max(1, trackWidthRef.current);
-      const deltaRating = (gestureState.dx / width) * 99;
-      const rating = Math.round(
-        Math.max(1, Math.min(100, startRatingRef.current + deltaRating))
-      );
-      onChange(rating);
+      const currentVal = Math.max(1, Math.min(100, (value ?? 50)));
+      startRatingRef.current = currentVal;
+      const currentX = ((currentVal - 1) / 99) * width;
+      const pageX = evt.nativeEvent.pageX;
+      touchOffsetRef.current = pageX - (trackXRef.current + currentX);
+    },
+    onPanResponderMove: (evt) => {
+      // Track based on local finger X minus preserved offset
+      const width = Math.max(1, trackWidthRef.current);
+      const localX = evt.nativeEvent.pageX - trackXRef.current - touchOffsetRef.current;
+      const clampedX = Math.max(0, Math.min(width, localX));
+      const pct = clampedX / width;
+      const rating = Math.round(1 + pct * 99);
+      // Drive thumb directly for smoothness
+      thumbTranslateX.setValue(clampedX - 14);
+      // Only propagate when rating actually changes to minimize re-renders (prevents wobble)
+      if (rating !== currentValueRef.current) {
+        currentValueRef.current = rating;
+        onChange(rating);
+      }
     },
     onPanResponderTerminationRequest: () => false,
-    onPanResponderRelease: (_evt, gestureState) => {
+    onPanResponderRelease: (evt) => {
       isSlidingRef.current = false;
       onSlidingChange?.(false);
       const width = Math.max(1, trackWidthRef.current);
-      const deltaRating = (gestureState.dx / width) * 99;
-      const rating = Math.round(
-        Math.max(1, Math.min(100, startRatingRef.current + deltaRating))
-      );
+      const localX = evt.nativeEvent.pageX - trackXRef.current - touchOffsetRef.current;
+      const clampedX = Math.max(0, Math.min(width, localX));
+      const pct = clampedX / width;
+      const rating = Math.round(1 + pct * 99);
       // finalize selection with subtle bounce
       handleRatingSelect(rating);
     },
@@ -202,7 +217,7 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
       isSlidingRef.current = false;
       onSlidingChange?.(false);
     },
-  }), [onChange]);
+  }), [onChange, onSlidingChange, value]);
 
   return (
     <View 

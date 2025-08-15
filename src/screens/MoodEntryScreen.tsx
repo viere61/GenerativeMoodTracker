@@ -50,6 +50,7 @@ const MoodEntryScreen = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAlreadyLoggedToday, setHasAlreadyLoggedToday] = useState(false);
   const [useSimpleComponents, setUseSimpleComponents] = useState(false);
+  const [isSliding, setIsSliding] = React.useState(false);
   
   // Check if user has already logged a mood today
   useEffect(() => {
@@ -322,9 +323,6 @@ const MoodEntryScreen = () => {
     );
   }
   
-  // Restore the original MoodEntryScreen return (before the scroll test):
-  const [isSliding, setIsSliding] = React.useState(false);
-
   return (
     <View style={{ flex: 1 }}>
       {(Platform.OS === 'ios' || Platform.OS === 'android') ? (
