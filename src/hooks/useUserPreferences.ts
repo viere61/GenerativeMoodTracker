@@ -26,7 +26,8 @@ export const useUserPreferences = () => {
             userId,
             {
               preferredTimeRange: { start: '09:00', end: '21:00' },
-              timeFormat: '12h'
+              timeFormat: '12h',
+              promptPrefix: 'ambient'
             }
           );
           setPreferences(defaultPreferences);

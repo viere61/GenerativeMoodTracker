@@ -19,6 +19,7 @@ export interface UserPreferences {
   customEmotionTags?: string[];
   customInfluenceTags?: string[];
   timeFormat?: '12h' | '24h';
+  promptPrefix?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic';
   [key: string]: any; // Allow for additional preferences
 }
 
@@ -114,6 +115,7 @@ class UserPreferencesService {
       customEmotionTags: [],
       customInfluenceTags: [],
       timeFormat: '12h',
+      promptPrefix: 'ambient',
     };
   }
   

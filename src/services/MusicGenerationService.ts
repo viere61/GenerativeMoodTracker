@@ -752,16 +752,35 @@ class MusicGenerationService {
    * @param moodEntry The mood entry to convert
    * @returns Text prompt for sound generation
    */
-  private createMusicPrompt(moodEntry: MoodEntry): string {
-    const { reflection } = moodEntry;
+  private createMusicPrompt(moodEntry: MoodEntry, prefixSetting: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' = 'ambient'): string {
+    const { reflection } = moodEntry as any;
+    const userText = (reflection || '').trim();
 
-    // Prompt engineering: prefix user input for ambient soundscape
-    const userText = reflection?.trim();
+    const mapLabel = (p: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic'): string => {
+      switch (p) {
+        case 'none':
+          return '';
+        case 'piano':
+          return 'Piano solo: ';
+        case 'orchestral':
+          return 'Orchestral: ';
+        case 'jazz':
+          return 'Jazz music: ';
+        case 'acoustic':
+          return 'Acoustic guitar: ';
+        case 'ambient':
+        default:
+          return 'Ambient soundscape: ';
+      }
+    };
+
+    const prefix = mapLabel(prefixSetting);
+
     if (userText) {
-      return `Ambient soundscape: ${userText}`;
+      return `${prefix}${userText}`.trim();
     }
     // Fallback if no reflection text
-    return 'Ambient soundscape: peaceful mood';
+    return `${prefix || 'Ambient soundscape: '}peaceful mood`.trim();
   }
 
   /**
@@ -788,7 +807,18 @@ class MusicGenerationService {
         throw new Error('Mood entry is required for music generation');
       }
 
-      const prompt = this.createMusicPrompt(request.moodEntry);
+      // Try to load user's preferred prompt prefix; default to 'ambient'
+      let prefixPref: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' = 'ambient';
+      try {
+        const UserPreferencesService = require('./UserPreferencesService').default;
+        const prefs = await UserPreferencesService.getPreferences(request.moodEntry.userId);
+        if (prefs?.promptPrefix) {
+          prefixPref = prefs.promptPrefix;
+        }
+      } catch (e) {
+        // ignore
+      }
+      const prompt = this.createMusicPrompt(request.moodEntry, prefixPref);
       if (isDebugMode()) {
         console.log('Generated prompt:', prompt);
       }
