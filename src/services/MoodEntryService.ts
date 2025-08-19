@@ -42,7 +42,11 @@ class MoodEntryService {
     let normalizedRating = moodRating;
     if (moodRating > 10) {
       const capped = Math.min(Math.max(moodRating, 1), 100);
-      normalizedRating = Math.round(1 + ((capped - 1) / 99) * 9);
+      // Map 1..100 slider to 1..10 with stable mid and extremes
+      const t = (capped - 1) / 99; // 0..1
+      const mapped = 1 + t * 9; // 1..10
+      // Use bankers rounding to reduce bias and ensure 50->5, 100->10, 1->1
+      normalizedRating = Math.max(1, Math.min(10, Math.round(mapped)));
     } else if (moodRating < 1) {
       normalizedRating = 1;
     }

@@ -100,7 +100,7 @@ const SettingsScreen = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>AI Sound Prompt</Text>
         <Text style={{ marginBottom: 8, color: '#666' }}>Choose a label to prepend to your reflection for AI sound generation.</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', opacity: 0.5 }}>
           {[
             { key: 'none', label: 'No label' },
             { key: 'ambient', label: 'Ambient soundscape' },
@@ -108,21 +108,20 @@ const SettingsScreen = () => {
             { key: 'orchestral', label: 'Orchestral' },
             { key: 'jazz', label: 'Jazz music' },
             { key: 'acoustic', label: 'Acoustic guitar' },
+            { key: 'foley', label: 'Foley' },
           ].map(opt => (
             <View key={opt.key} style={{ marginRight: 10, marginBottom: 10 }}>
               <Button
                 title={opt.label}
-                onPress={() => updatePreference('promptPrefix', opt.key)}
-                color={(preferences?.promptPrefix ?? 'ambient') === (opt.key as any) ? '#4a90e2' : undefined}
+                disabled={true}
+                onPress={() => {}}
               />
             </View>
           ))}
         </View>
-        <Text style={{ marginTop: 6, color: '#666' }}>Current: {(() => {
-          const key = preferences?.promptPrefix ?? 'ambient';
-          const map: any = { none: 'No label', ambient: 'Ambient soundscape', piano: 'Piano solo', orchestral: 'Orchestral', jazz: 'Jazz music', acoustic: 'Acoustic guitar' };
-          return map[key];
-        })()}</Text>
+        <Text style={{ marginTop: 6, color: '#666' }}>
+          A random label will be chosen automatically for each generation.
+        </Text>
       </View>
 
       {/* Email notifications removed */}

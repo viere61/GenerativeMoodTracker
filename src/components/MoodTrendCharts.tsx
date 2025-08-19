@@ -122,7 +122,15 @@ const MoodTrendCharts: React.FC<MoodTrendChartsProps> = ({ entries, isLoading })
     const maxY = 10;
 
     const toX = (ts: number) => leftPadding + ((ts - startTs) / span) * plotWidth;
-    const toY = (rating: number) => topPadding + (1 - (rating - minY) / (maxY - minY)) * plotHeight;
+    // Display adjustment: render Neutral (5) exactly on the midline (5.5), keep 1 and 10 anchored
+    const toY = (rating: number) => {
+      let displayRating = rating;
+      if (Math.abs(rating - 5) < 1e-6) {
+        displayRating = 5.5;
+      }
+      displayRating = Math.max(minY, Math.min(maxY, displayRating));
+      return topPadding + (1 - (displayRating - minY) / (maxY - minY)) * plotHeight;
+    };
 
     // Build a few vertical tick marks (4)
     const ticks = [0.2, 0.4, 0.6, 0.8];
