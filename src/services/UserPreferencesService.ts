@@ -20,6 +20,7 @@ export interface UserPreferences {
   customInfluenceTags?: string[];
   timeFormat?: '12h' | '24h';
   promptPrefix?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' | 'foley';
+  dualLayerGeneration?: boolean;
   [key: string]: any; // Allow for additional preferences
 }
 
@@ -116,6 +117,7 @@ class UserPreferencesService {
       customInfluenceTags: [],
       timeFormat: '12h',
       promptPrefix: 'ambient',
+      dualLayerGeneration: false,
     };
   }
   

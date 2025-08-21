@@ -124,6 +124,21 @@ const SettingsScreen = () => {
         </Text>
       </View>
 
+      {/* Dual-layer generation Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Dual-layer Generation</Text>
+        <Text style={{ marginBottom: 8, color: '#666' }}>
+          When enabled, two sounds will be generated with different labels and layered into a single audio file.
+        </Text>
+        <View style={styles.settingRow}>
+          <Text>Generate two layered sounds</Text>
+          <Switch
+            value={!!preferences?.dualLayerGeneration}
+            onValueChange={(v) => { updatePreference('dualLayerGeneration', v); }}
+          />
+        </View>
+      </View>
+
       {/* Email notifications removed */}
 
       {/* Push notifications advanced settings removed */}

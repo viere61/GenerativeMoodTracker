@@ -813,19 +813,47 @@ class MusicGenerationService {
       const prefixOptions: Array<'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' | 'foley'> = [
         'none', 'ambient', 'piano', 'orchestral', 'jazz', 'acoustic', 'foley'
       ];
-      const prefixPref = prefixOptions[Math.floor(Math.random() * prefixOptions.length)];
-      const prompt = this.createMusicPrompt(request.moodEntry, prefixPref);
+      // Determine if dual-layer generation is enabled
+      let dualLayer = false;
+      try {
+        const UserPreferencesService = require('./UserPreferencesService').default;
+        const prefs = await UserPreferencesService.getPreferences(request.moodEntry.userId);
+        dualLayer = !!prefs?.dualLayerGeneration;
+      } catch {}
+
+      let prompt: string;
+      if (!dualLayer) {
+        const prefixPref = prefixOptions[Math.floor(Math.random() * prefixOptions.length)];
+        prompt = this.createMusicPrompt(request.moodEntry, prefixPref);
+      } else {
+        // Pick two distinct prefixes
+        const first = prefixOptions[Math.floor(Math.random() * prefixOptions.length)];
+        let second = first;
+        while (second === first) {
+          second = prefixOptions[Math.floor(Math.random() * prefixOptions.length)];
+        }
+        // Compose a combined prompt hint to backend
+        // e.g., "[LABEL1] + [LABEL2]: user text" so backend can optionally consider blending
+        const promptA = this.createMusicPrompt(request.moodEntry, first);
+        const labelB = this.createMusicPrompt(request.moodEntry, second).split(':')[0];
+        prompt = `${promptA} | Layer with ${labelB}`;
+        (request as any)._dualLayer = { first, second };
+      }
       if (isDebugMode()) {
         console.log('Generated prompt:', prompt);
       }
 
-      // Try ElevenLabs AI generation first
+      // Try ElevenLabs AI generation first (supports single or dual layer)
       console.log('🎵 [generateMusicFromAPI] ElevenLabs enabled:', this.AI_SERVICES.ELEVENLABS.enabled);
       console.log('🎵 [generateMusicFromAPI] ElevenLabs API key configured:', this.AI_SERVICES.ELEVENLABS.apiKey !== 'YOUR_ELEVENLABS_API_KEY_HERE');
       
       if (this.AI_SERVICES.ELEVENLABS.enabled) {
         try {
           console.log('🎵 [generateMusicFromAPI] Attempting ElevenLabs generation...');
+          if ((request as any)._dualLayer) {
+            // Let backend perform dual-layer mixing; we already embedded Layer-with info in prompt
+            return await this.tryElevenLabsGeneration(prompt, musicObject, true);
+          }
           return await this.tryElevenLabsGeneration(prompt, musicObject);
         } catch (error) {
           console.error('🎵 [generateMusicFromAPI] ElevenLabs generation failed:', error instanceof Error ? error.message : String(error));
@@ -884,7 +912,7 @@ class MusicGenerationService {
   /**
    * Try to generate music using Hugging Face MusicGen API
    */
-  private async tryElevenLabsGeneration(prompt: string, musicObject: GeneratedMusic): Promise<GeneratedMusic> {
+  private async tryElevenLabsGeneration(prompt: string, musicObject: GeneratedMusic, dualLayer: boolean = false): Promise<GeneratedMusic> {
     if (isDebugMode()) {
       console.log('🎵 Trying ElevenLabs Sound Effects API via backend proxy...');
       console.log('🎵 Prompt:', prompt);
@@ -907,7 +935,8 @@ class MusicGenerationService {
         },
         body: JSON.stringify({
           prompt: soundDescription,
-          userId: musicObject.userId
+          userId: musicObject.userId,
+          dualLayer
         }),
       });
 
@@ -1665,6 +1694,47 @@ class MusicGenerationService {
     }
 
     return arrayBuffer;
+  }
+
+  /**
+   * Mix two WAV files (mono) into a single WAV by averaging samples; returns saved file URL
+   */
+  private async mixTwoWavFiles(urlA: string, urlB: string, targetMusicId: string): Promise<string> {
+    try {
+      // Read both files into ArrayBuffers
+      const fileA = await FileSystem.readAsStringAsync(urlA, { encoding: FileSystem.EncodingType.Base64 });
+      const fileB = await FileSystem.readAsStringAsync(urlB, { encoding: FileSystem.EncodingType.Base64 });
+      const bytesA = base64ToUint8Array(fileA);
+      const bytesB = base64ToUint8Array(fileB);
+
+      // Very simple WAV parsing assuming PCM16 mono; skip 44-byte header
+      const headerSize = 44;
+      const dataLen = Math.min(Math.max(bytesA.length - headerSize, 0), Math.max(bytesB.length - headerSize, 0));
+      const viewA = new DataView(bytesA.buffer);
+      const viewB = new DataView(bytesB.buffer);
+
+      // Output WAV buffer: reuse header from A and mix samples
+      const outBytes = new Uint8Array(bytesA.length);
+      outBytes.set(bytesA);
+      const outView = new DataView(outBytes.buffer);
+
+      for (let i = 0; i < dataLen; i += 2) {
+        const sA = viewA.getInt16(headerSize + i, true);
+        const sB = viewB.getInt16(headerSize + i, true);
+        let mixed = (sA + sB) / 2;
+        mixed = Math.max(-32768, Math.min(32767, mixed));
+        outView.setInt16(headerSize + i, mixed, true);
+      }
+
+      // Save mixed file
+      const localFilePath = `${this.MUSIC_DIRECTORY}${targetMusicId}.wav`;
+      const base64 = this.encodeBase64(outBytes);
+      await FileSystem.writeAsStringAsync(localFilePath, base64, { encoding: FileSystem.EncodingType.Base64 });
+      return localFilePath;
+    } catch (e) {
+      console.error('Failed to mix WAV files, fallback to first URL:', e);
+      return urlA;
+    }
   }
 
   /**

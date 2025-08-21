@@ -2,6 +2,11 @@ const express = require('express');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+}
 
 // Rate limiting: 10 requests per hour per user
 const musicGenerationLimiter = rateLimit({
@@ -162,7 +167,7 @@ const musicServices = {
 // Music generation endpoint with multiple service fallbacks
 router.post('/generate', musicGenerationLimiter, async (req, res) => {
   try {
-    const { prompt, userId } = req.body;
+    const { prompt, userId, dualLayer } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
@@ -174,6 +179,21 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
     let audioFormat = 'mp3';
     let generationMethod = 'unknown';
     let errors = [];
+
+    // Helper: If dualLayer requested, split prompt into two labels for separate generations
+    const parseDualPrompts = (p) => {
+      // Expect format like "<LabelA>: <text> | Layer with <LabelB>"
+      const sep = '| Layer with ';
+      if (!dualLayer || !p.includes(sep)) return null;
+      const [firstPart, labelB] = p.split(sep);
+      const secondLabel = labelB.trim();
+      const textStart = firstPart.indexOf(':');
+      const firstPrompt = firstPart;
+      const baseText = textStart >= 0 ? firstPart.slice(textStart + 1).trim() : firstPart.trim();
+      // Reconstruct second prompt as "<LabelB>: <text>"
+      const secondPrompt = `${secondLabel}: ${baseText}`;
+      return { firstPrompt, secondPrompt };
+    };
 
     // Try different services in order of preference
 
@@ -222,6 +242,73 @@ router.post('/generate', musicGenerationLimiter, async (req, res) => {
       } catch (sunoError) {
         console.log('❌ Suno AI failed:', sunoError.message);
         errors.push(`Suno: ${sunoError.message}`);
+      }
+    }
+
+    let secondAudioData = null;
+    if (!audioData && dualLayer) {
+      // If first failed entirely, continue to fallback below
+    }
+
+    // Dual-layer path: generate both parts and mix server-side with ffmpeg
+    if (dualLayer) {
+      try {
+        const split = parseDualPrompts(prompt);
+        if (split) {
+          // Generate part A
+          let aData = null;
+          if (process.env.ELEVENLABS_API_KEY) {
+            try { aData = await musicServices.generateWithElevenLabs(split.firstPrompt); audioFormat = 'mp3'; } catch {}
+          }
+          if (!aData && process.env.REPLICATE_API_TOKEN) {
+            try { aData = await musicServices.generateWithReplicate(split.firstPrompt); audioFormat = 'mp3'; } catch {}
+          }
+          if (!aData && process.env.HUGGINGFACE_API_TOKEN) {
+            try { aData = await musicServices.generateWithHuggingFace(split.firstPrompt); audioFormat = 'mp3'; } catch {}
+          }
+          if (!aData) throw new Error('Failed to generate first layer');
+
+          // Generate part B
+          let bData = null;
+          if (process.env.ELEVENLABS_API_KEY) {
+            try { bData = await musicServices.generateWithElevenLabs(split.secondPrompt); } catch {}
+          }
+          if (!bData && process.env.REPLICATE_API_TOKEN) {
+            try { bData = await musicServices.generateWithReplicate(split.secondPrompt); } catch {}
+          }
+          if (!bData && process.env.HUGGINGFACE_API_TOKEN) {
+            try { bData = await musicServices.generateWithHuggingFace(split.secondPrompt); } catch {}
+          }
+          if (!bData) throw new Error('Failed to generate second layer');
+
+          // Mix with ffmpeg amix
+          const fs = require('fs');
+          const os = require('os');
+          const path = require('path');
+          const tmpA = path.join(os.tmpdir(), `layerA_${Date.now()}.mp3`);
+          const tmpB = path.join(os.tmpdir(), `layerB_${Date.now()}.mp3`);
+          const out = path.join(os.tmpdir(), `mix_${Date.now()}.mp3`);
+          fs.writeFileSync(tmpA, aData);
+          fs.writeFileSync(tmpB, bData);
+
+          await new Promise((resolve, reject) => {
+            ffmpeg()
+              .input(tmpA)
+              .input(tmpB)
+              .complexFilter(['[0:a][1:a]amix=inputs=2:duration=shortest:normalize=0[a]'])
+              .outputOptions(['-map [a]', '-c:a libmp3lame'])
+              .save(out)
+              .on('end', resolve)
+              .on('error', reject);
+          });
+
+          const mixedBuffer = fs.readFileSync(out);
+          audioData = mixedBuffer;
+          audioFormat = 'mp3';
+          generationMethod = 'elevenlabs_dual_mix';
+        }
+      } catch (mixErr) {
+        console.log('❌ Dual-layer mixing failed; falling back to single-layer path:', mixErr.message);
       }
     }
 
