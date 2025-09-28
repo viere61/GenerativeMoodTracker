@@ -14,6 +14,7 @@ interface ReflectionTextInputProps {
   minLength?: number;
   maxLength?: number;
   onValidationChange?: (isValid: boolean) => void;
+  showSubtitle?: boolean;
 }
 
 /**
@@ -28,6 +29,7 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
   minLength = 0,
   maxLength = 1000,
   onValidationChange,
+  showSubtitle = true,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
@@ -103,7 +105,9 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Reflection</Text>
-      <Text style={styles.subtitle}>{weeklyPrompt}</Text>
+      {showSubtitle && (
+        <Text style={styles.subtitle}>{weeklyPrompt}</Text>
+      )}
       
       <TextInput
         style={[

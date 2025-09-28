@@ -108,7 +108,6 @@ const SettingsScreen = () => {
             { key: 'orchestral', label: 'Orchestral' },
             { key: 'jazz', label: 'Jazz music' },
             { key: 'acoustic', label: 'Acoustic guitar' },
-            { key: 'foley', label: 'Foley' },
           ].map(opt => (
             <View key={opt.key} style={{ marginRight: 10, marginBottom: 10 }}>
               <Button

@@ -80,6 +80,16 @@ const MoodEntryScreen = () => {
   
   // Check if form is valid
   const isFormValid = isRatingValid && areTagsValid && areInfluencesValid && isReflectionValid;
+
+  const handleNext = () => {
+    if (!user?.userId || !isRatingValid || !areTagsValid || !areInfluencesValid) return;
+    navigation.navigate('Reflection', {
+      userId: user.userId,
+      moodRating: moodRating as number,
+      emotionTags,
+      influences,
+    });
+  };
   
   const handleSubmit = async () => {
     if (!user?.userId || !moodRating || !isFormValid) return;
@@ -361,29 +371,21 @@ const MoodEntryScreen = () => {
                 onValidationChange={setAreInfluencesValid}
               />
             </View>
-            <View style={styles.reflectionContainer}>
-              <ReflectionTextInput
-                value={reflection}
-                onChange={setReflection}
-                minLength={0}
-                onValidationChange={setIsReflectionValid}
-              />
-            </View>
             <View style={styles.submitContainer}>
               <TouchableOpacity
                 style={[
                   styles.submitButton,
-                  (!isFormValid || isSubmitting) && styles.disabledButton
+                  (!(isRatingValid && areTagsValid && areInfluencesValid) || isSubmitting) && styles.disabledButton
                 ]}
-                onPress={handleSubmit}
-                disabled={!isFormValid || isSubmitting}
-                accessibilityLabel="Submit mood entry"
-                accessibilityHint="Save your mood rating, emotions, and reflection"
+                onPress={handleNext}
+                disabled={!(isRatingValid && areTagsValid && areInfluencesValid) || isSubmitting}
+                accessibilityLabel="Next"
+                accessibilityHint="Go to reflection step"
               >
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Submit</Text>
+                  <Text style={styles.submitButtonText}>Next</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -401,7 +403,7 @@ const MoodEntryScreen = () => {
                 {!areInfluencesValid && (
                   <Text style={styles.validationMessage}>• Select at least one influence</Text>
                 )}
-                {/* No reflection length validation */}
+                {/* Reflection moved to next step */}
               </View>
             )}
             <View style={{ height: 100 }} />
@@ -438,30 +440,18 @@ const MoodEntryScreen = () => {
               onValidationChange={setAreInfluencesValid}
             />
           </View>
-          <View style={styles.reflectionContainer}>
-            <ReflectionTextInput
-              value={reflection}
-              onChange={setReflection}
-              minLength={0}
-              onValidationChange={setIsReflectionValid}
-            />
-          </View>
           <View style={styles.submitContainer}>
             <TouchableOpacity
               style={[
                 styles.submitButton,
-                (!isFormValid || isSubmitting) && styles.disabledButton
+                (!(isRatingValid && areTagsValid && areInfluencesValid) && styles.disabledButton)
               ]}
-              onPress={handleSubmit}
-              disabled={!isFormValid || isSubmitting}
-              accessibilityLabel="Submit mood entry"
-              accessibilityHint="Save your mood rating, emotions, and reflection"
+              onPress={handleNext}
+              disabled={!(isRatingValid && areTagsValid && areInfluencesValid)}
+              accessibilityLabel="Next"
+              accessibilityHint="Go to reflection step"
             >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitButtonText}>Submit</Text>
-              )}
+              <Text style={styles.submitButtonText}>Next</Text>
             </TouchableOpacity>
           </View>
           {!isFormValid && (
@@ -478,7 +468,7 @@ const MoodEntryScreen = () => {
                 {!areInfluencesValid && (
                   <Text style={styles.validationMessage}>• Select at least one influence</Text>
                 )}
-                {/* No reflection length validation */}
+              {/* Reflection moved to next step */}
             </View>
           )}
           <View style={{ height: 100 }} />

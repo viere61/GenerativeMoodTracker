@@ -19,7 +19,7 @@ export interface UserPreferences {
   customEmotionTags?: string[];
   customInfluenceTags?: string[];
   timeFormat?: '12h' | '24h';
-  promptPrefix?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' | 'foley';
+  promptPrefix?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic';
   [key: string]: any; // Allow for additional preferences
 }
 

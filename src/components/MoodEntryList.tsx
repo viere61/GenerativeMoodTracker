@@ -164,6 +164,12 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
             ))}
           </View>
         )}
+        {item.promptLabel && (
+          <View style={styles.influenceContainer}>
+            <Text style={styles.influenceLabel}>AI Sound Label:</Text>
+            <Text style={styles.influenceTag}>{item.promptLabel}</Text>
+          </View>
+        )}
         <Text 
           style={styles.entryReflection}
           numberOfLines={2}

@@ -84,15 +84,15 @@ class MoodEntryService {
         console.error('🎵 [saveMoodEntry] Music generation failed:', error);
       });
       
-      // Ensure 7 days of windows ahead exist after successful mood save
+      // Ensure 30 days of windows ahead exist after successful mood save
       try {
         const TimeWindowService = (await import('./TimeWindowService')).default;
         const PushNotificationService = (await import('./PushNotificationService')).default;
         
-        console.log('🔄 [MoodEntryService] Ensuring 7 days of windows ahead after mood save...');
+        console.log('🔄 [MoodEntryService] Ensuring 30 days of windows ahead after mood save...');
         
         // Create multi-day windows
-        const windows = await TimeWindowService.createMultiDayWindows(userId, 7);
+        const windows = await TimeWindowService.createMultiDayWindows(userId, 30);
         console.log('🔄 [MoodEntryService] Created', windows.length, 'windows ahead');
         
         // Schedule notifications for the new windows
@@ -216,6 +216,63 @@ class MoodEntryService {
   async hasLoggedMoodToday(userId: string): Promise<boolean> {
     const todayEntry = await this.getTodaysMoodEntry(userId);
     return todayEntry !== null;
+  }
+
+  /**
+   * Backfill prompt labels for existing entries and generated music
+   * Sets missing labels to "No label" and prefix to 'none'
+   */
+  async backfillPromptLabels(userId: string): Promise<void> {
+    try {
+      // Backfill mood entries
+      const entries = await this.getMoodEntries(userId);
+      let entriesChanged = false;
+      const updatedEntries = entries.map(e => {
+        if (e.musicId && (!e.promptLabel || !e.promptPrefix)) {
+          entriesChanged = true;
+          return { ...e, promptLabel: e.promptLabel || 'No label', promptPrefix: e.promptPrefix || 'none' } as MoodEntry;
+        }
+        return e;
+      });
+
+      if (entriesChanged) {
+        if (isWeb) {
+          await WebStorageService.storeMoodEntries(userId, updatedEntries);
+        } else {
+          await LocalStorageManager.storeMoodEntries(userId, updatedEntries);
+        }
+      }
+
+      // Backfill generated music objects
+      if (isWeb) {
+        const allMusic = await WebStorageService.retrieveAllGeneratedMusic(userId);
+        for (const m of allMusic) {
+          if (!m.promptLabelUsed || !m.promptPrefixUsed) {
+            m.promptLabelUsed = m.promptLabelUsed || 'No label';
+            m.promptPrefixUsed = m.promptPrefixUsed || 'none';
+            await WebStorageService.storeGeneratedMusic(userId, m);
+          }
+        }
+      } else {
+        const allMusic = await LocalStorageManager.retrieveAllGeneratedMusic(userId);
+        let musicChanged = false;
+        const updatedMusic = allMusic.map(m => {
+          if (!m.promptLabelUsed || !m.promptPrefixUsed) {
+            musicChanged = true;
+            return { ...m, promptLabelUsed: m.promptLabelUsed || 'No label', promptPrefixUsed: m.promptPrefixUsed || 'none' } as any;
+          }
+          return m;
+        });
+        if (musicChanged) {
+          // Re-store each music item via storeGeneratedMusic to keep API consistent
+          for (const m of updatedMusic) {
+            await LocalStorageManager.storeGeneratedMusic(userId, m);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to backfill prompt labels:', error);
+    }
   }
 
   /**

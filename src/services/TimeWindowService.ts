@@ -417,8 +417,8 @@ class TimeWindowService {
     try {
       console.log('🔍 [getNextWindowAfterToday] Looking for tomorrow\'s window or later...');
 
-      // Look for the next available window starting from tomorrow
-      for (let i = 1; i <= 7; i++) {
+      // Look for the next available window starting from tomorrow (extend to 30 days)
+      for (let i = 1; i <= 30; i++) {
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + i);
         const dateString = targetDate.toISOString().split('T')[0];
@@ -470,8 +470,8 @@ class TimeWindowService {
         return todayWindow;
       }
 
-      // Look for the next available window in the next 7 days
-      for (let i = 1; i <= 7; i++) {
+      // Look for the next available window in the next 30 days
+      for (let i = 1; i <= 30; i++) {
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + i);
         const dateString = targetDate.toISOString().split('T')[0];

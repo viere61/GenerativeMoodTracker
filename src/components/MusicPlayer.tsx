@@ -109,9 +109,9 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   const [duration, setDuration] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
-  const [isRepeatEnabled, setIsRepeatEnabled] = useState<boolean>(false);
+  const [isRepeatEnabled, setIsRepeatEnabled] = useState<boolean>(true);
   const [volume, setVolume] = useState<number>(1.0); // Default to full volume
-  const [showDetails, setShowDetails] = useState<boolean>(false);
+  
   
   // Animation for the equalizer effect
   const [animation] = useState(new Animated.Value(0));
@@ -147,6 +147,11 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
     return () => {
       MusicGenerationService.stopMusic();
     };
+  }, []);
+
+  // Ensure repeat mode is enabled by default
+  useEffect(() => {
+    MusicGenerationService.setRepeatMode(true);
   }, []);
   
   // Update status message when playback state changes
@@ -351,15 +356,10 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   };
   
   // Handle volume change
-  const handleVolumeChange = async (newVolume: number) => {
-    setVolume(newVolume);
-    await MusicGenerationService.setVolume(newVolume);
-  };
+  
   
   // Toggle detailed music information display
-  const toggleDetailsView = () => {
-    setShowDetails(!showDetails);
-  };
+  
   
   // Handle stop button press
   const handleStop = async () => {
@@ -543,54 +543,9 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         </TouchableOpacity>
       </View>
       
-      {/* Volume control */}
-      <View style={styles.volumeContainer}>
-        <Ionicons name="volume-low" size={18} color="#666" />
-        <SliderComponent
-          style={styles.volumeSlider}
-          minimumValue={0}
-          maximumValue={1}
-          value={volume}
-          minimumTrackTintColor="#4a90e2"
-          maximumTrackTintColor="#d3d3d3"
-          thumbTintColor="#4a90e2"
-          onValueChange={handleVolumeChange}
-        />
-        <Ionicons name="volume-high" size={18} color="#666" />
-      </View>
       
-      <View style={styles.sectionHeader}>
-        <TouchableOpacity onPress={toggleDetailsView}>
-          <Text style={styles.detailsToggle}>
-            {showDetails ? "Hide Details" : "Show Details"}
-          </Text>
-        </TouchableOpacity>
-      </View>
       
-      {/* Detailed music information */}
-      {showDetails && (
-        <View style={styles.detailsContainer}>
-          <Text style={styles.detailsTitle}>Music Generation Details</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Tempo:</Text>
-            <Text style={styles.detailValue}>{musicDetails.musicParameters.tempo} BPM</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Key:</Text>
-            <Text style={styles.detailValue}>{musicDetails.musicParameters.key}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Mood:</Text>
-            <Text style={styles.detailValue}>{musicDetails.musicParameters.mood}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Generated:</Text>
-            <Text style={styles.detailValue}>
-              {new Date(musicDetails.generatedAt).toLocaleString()}
-            </Text>
-          </View>
-        </View>
-      )}
+      
     </View>
   );
 };

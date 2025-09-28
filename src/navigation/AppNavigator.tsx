@@ -10,12 +10,14 @@ import MoodEntryScreen from '../screens/MoodEntryScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+import ReflectionScreen from '../screens/ReflectionScreen';
 
 // Define navigation types
 export type RootStackParamList = {
   Onboarding: undefined;
   Main: { screen?: keyof MainTabParamList; params?: MainTabParamList[keyof MainTabParamList] } | undefined;
   MoodEntry: undefined;
+  Reflection: any;
 };
 
 export type MainTabParamList = {
@@ -82,6 +84,11 @@ const AppNavigator = () => {
           name="MoodEntry" 
           component={MoodEntryScreen} 
           options={{ title: 'Log Your Mood' }}
+        />
+        <Stack.Screen 
+          name="Reflection" 
+          component={ReflectionScreen} 
+          options={{ title: 'Write Your Reflection' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

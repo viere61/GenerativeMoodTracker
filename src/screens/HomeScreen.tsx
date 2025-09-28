@@ -143,7 +143,7 @@ const HomeScreen = () => {
       console.log('✅ Updated today\'s window with new time range');
 
       // Create multi-day windows with new time range (7 days including today)
-      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 7);
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 30);
       console.log('✅ Created', multiDayWindows.length, 'multi-day windows with new time range');
 
       // Schedule notifications for all future windows
@@ -270,7 +270,7 @@ const HomeScreen = () => {
       console.log('🏠 [handleResetTimeWindow] ✅ Reset today\'s window');
 
       // Create multi-day windows (7 days including today)
-      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 7);
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 30);
       console.log('🏠 [handleResetTimeWindow] ✅ Created', multiDayWindows.length, 'multi-day windows');
 
       // Log today's window details to verify it's correct

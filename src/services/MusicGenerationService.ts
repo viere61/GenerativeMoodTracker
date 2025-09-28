@@ -689,12 +689,14 @@ class MusicGenerationService {
           console.log('🎵 [generateMusic] Attempting to update mood entry with musicId...');
           if (isWeb) {
             const entries = await WebStorageService.retrieveMoodEntries(userId);
-            const updated = entries.map(e => e.entryId === moodEntry.entryId ? { ...e, musicGenerated: true, musicId: generatedMusic.musicId } : e);
+            const updated = entries.map(e => e.entryId === moodEntry.entryId ? { ...e, musicGenerated: true, musicId: generatedMusic.musicId, promptPrefix: generatedMusic.promptPrefixUsed, promptLabel: generatedMusic.promptLabelUsed } : e);
             await WebStorageService.storeMoodEntries(userId, updated);
           } else {
             await LocalStorageManager.updateMoodEntry(userId, moodEntry.entryId, {
               musicGenerated: true,
               musicId: generatedMusic.musicId,
+              promptPrefix: generatedMusic.promptPrefixUsed,
+              promptLabel: generatedMusic.promptLabelUsed,
             });
           }
           console.log('🎵 [generateMusic] Mood entry updated with musicId:', generatedMusic.musicId);
@@ -752,11 +754,11 @@ class MusicGenerationService {
    * @param moodEntry The mood entry to convert
    * @returns Text prompt for sound generation
    */
-  private createMusicPrompt(moodEntry: MoodEntry, prefixSetting: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' | 'foley' = 'ambient'): string {
+  private createMusicPrompt(moodEntry: MoodEntry, prefixSetting: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' = 'ambient'): string {
     const { reflection } = moodEntry as any;
     const userText = (reflection || '').trim();
 
-    const mapLabel = (p: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' | 'foley'): string => {
+    const mapLabel = (p: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic'): string => {
       switch (p) {
         case 'none':
           return '';
@@ -768,8 +770,7 @@ class MusicGenerationService {
           return 'Jazz music: ';
         case 'acoustic':
           return 'Acoustic guitar: ';
-        case 'foley':
-          return 'Foley: ';
+        
         case 'ambient':
         default:
           return 'Ambient soundscape: ';
@@ -810,11 +811,21 @@ class MusicGenerationService {
       }
 
       // Randomize prompt prefix each generation (selection disabled in settings)
-      const prefixOptions: Array<'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic' | 'foley'> = [
-        'none', 'ambient', 'piano', 'orchestral', 'jazz', 'acoustic', 'foley'
+      const prefixOptions: Array<'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic'> = [
+        'none', 'ambient', 'piano', 'orchestral', 'jazz', 'acoustic'
       ];
       const prefixPref = prefixOptions[Math.floor(Math.random() * prefixOptions.length)];
       const prompt = this.createMusicPrompt(request.moodEntry, prefixPref);
+      const labelMap: Record<'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic', string> = {
+        none: 'No label',
+        ambient: 'Ambient soundscape',
+        piano: 'Piano solo',
+        orchestral: 'Orchestral',
+        jazz: 'Jazz music',
+        acoustic: 'Acoustic guitar',
+      };
+      musicObject.promptPrefixUsed = prefixPref;
+      musicObject.promptLabelUsed = labelMap[prefixPref];
       if (isDebugMode()) {
         console.log('Generated prompt:', prompt);
       }

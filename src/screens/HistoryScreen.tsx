@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } fr
 import { useFocusEffect } from '@react-navigation/native';
 import MoodEntryService from '../services/MoodEntryService';
 import MoodEntryList from '../components/MoodEntryList';
-import MoodTrendCharts from '../components/MoodTrendCharts';
+// Charts UI removed from rendering (implementation kept in its own file)
 import MusicPlayer from '../components/MusicPlayer';
-import DataExportModal from '../components/DataExportModal';
+// Data export UI removed from rendering
 import { MoodEntry } from '../types';
-import { Calendar } from 'react-native-calendars';
+// Date range calendar UI removed from rendering
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import WeeklySoundService from '../services/WeeklySoundService';
@@ -19,17 +19,9 @@ const HistoryScreen = ({ route }: any) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedEntry, setSelectedEntry] = useState<MoodEntry | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState<boolean>(false);
-  const [calendarVisible, setCalendarVisible] = useState<boolean>(false);
-  const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'list' | 'charts' | 'weekly'>(route?.params?.initialHistoryTab || 'list');
-  const [weeklySelections, setWeeklySelections] = useState<any[]>([]);
-  const [selectedDates, setSelectedDates] = useState<{
-    startDate: string | null;
-    endDate: string | null;
-  }>({
-    startDate: null,
-    endDate: null,
-  });
+  
+  // Tabs removed from UI; keep list view only
+  
 
   // Load mood entries when component mounts
   useEffect(() => {
@@ -41,9 +33,13 @@ const HistoryScreen = ({ route }: any) => {
     useCallback(() => {
       console.log('📱 [HistoryScreen] Screen focused, refreshing entries');
       loadMoodEntries();
+      // Backfill any missing labels
       (async () => {
-        const selections = await WeeklySoundService.getWeeklySelections(user.userId);
-        setWeeklySelections(selections);
+        try {
+          await MoodEntryService.backfillPromptLabels(user.userId);
+          // Reload to reflect any changes
+          await loadMoodEntries();
+        } catch {}
       })();
     }, [])
   );
@@ -107,45 +103,7 @@ const HistoryScreen = ({ route }: any) => {
     return 'Very Unpleasant';
   };
 
-  // Apply date range filter
-  const applyDateFilter = () => {
-    setCalendarVisible(false);
-    loadMoodEntriesWithDateFilter();
-  };
-
-  // Load mood entries with date filter
-  const loadMoodEntriesWithDateFilter = async () => {
-    setIsLoading(true);
-    try {
-      let entries = await MoodEntryService.getMoodEntries(user.userId);
-      
-      // Apply date range filter if both dates are selected
-      if (selectedDates.startDate && selectedDates.endDate) {
-        const startTimestamp = new Date(selectedDates.startDate).setHours(0, 0, 0, 0);
-        const endTimestamp = new Date(selectedDates.endDate).setHours(23, 59, 59, 999);
-        
-        entries = entries.filter(entry => 
-          entry.timestamp >= startTimestamp && entry.timestamp <= endTimestamp
-        );
-      }
-      
-      setMoodEntries(entries);
-    } catch (error) {
-      console.error('Error loading mood entries with date filter:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Reset date filter
-  const resetDateFilter = () => {
-    setSelectedDates({
-      startDate: null,
-      endDate: null,
-    });
-    loadMoodEntries();
-    setCalendarVisible(false);
-  };
+  // Date range filtering removed from UI (implementation kept for future use)
 
   // Render the detail modal
   const renderDetailModal = () => {
@@ -229,88 +187,7 @@ const HistoryScreen = ({ route }: any) => {
     );
   };
 
-  // Render the calendar modal for date range selection
-  const renderCalendarModal = () => {
-    return (
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={calendarVisible}
-        onRequestClose={() => setCalendarVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Date Range</Text>
-            
-            <Calendar
-              markingType={'period'}
-              markedDates={
-                selectedDates.startDate && selectedDates.endDate
-                  ? {
-                      [selectedDates.startDate]: { 
-                        startingDay: true, 
-                        color: '#4a90e2' 
-                      },
-                      [selectedDates.endDate]: { 
-                        endingDay: true, 
-                        color: '#4a90e2' 
-                      },
-                      ...(getDatesInRange(selectedDates.startDate, selectedDates.endDate).reduce(
-                        (acc, date) => ({
-                          ...acc,
-                          [date]: { color: '#4a90e2', textColor: 'white' },
-                        }),
-                        {}
-                      )),
-                    }
-                  : selectedDates.startDate
-                  ? { [selectedDates.startDate]: { selected: true, color: '#4a90e2' } }
-                  : {}
-              }
-              onDayPress={(day) => {
-                if (!selectedDates.startDate || (selectedDates.startDate && selectedDates.endDate)) {
-                  // Start new selection
-                  setSelectedDates({
-                    startDate: day.dateString,
-                    endDate: null,
-                  });
-                } else {
-                  // Complete the selection
-                  if (new Date(day.dateString) >= new Date(selectedDates.startDate)) {
-                    setSelectedDates({
-                      ...selectedDates,
-                      endDate: day.dateString,
-                    });
-                  } else {
-                    // If end date is before start date, swap them
-                    setSelectedDates({
-                      startDate: day.dateString,
-                      endDate: selectedDates.startDate,
-                    });
-                  }
-                }
-              }}
-            />
-            
-            <View style={styles.calendarButtonContainer}>
-              <TouchableOpacity
-                style={[styles.calendarButton, styles.resetButton]}
-                onPress={resetDateFilter}
-              >
-                <Text style={styles.buttonText}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.calendarButton, styles.applyButton]}
-                onPress={applyDateFilter}
-              >
-                <Text style={styles.buttonText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
+  // Calendar modal removed from UI
 
   // Helper function to get all dates in a range
   const getDatesInRange = (startDate: string, endDate: string) => {
@@ -340,80 +217,22 @@ const HistoryScreen = ({ route }: any) => {
           >
             <Ionicons name="refresh" size={20} color="#555" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.exportButton}
-            onPress={() => setExportModalVisible(true)}
-          >
-            <Ionicons name="download-outline" size={20} color="#555" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dateFilterButton}
-            onPress={() => setCalendarVisible(true)}
-          >
-            <Text style={styles.dateFilterText}>
-              {selectedDates.startDate && selectedDates.endDate
-                ? `${format(new Date(selectedDates.startDate), 'MMM d')} - ${format(new Date(selectedDates.endDate), 'MMM d')}`
-                : 'Date Range'}
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
       
       {/* Show info when music generation might be in progress */}
       {/* Removed: generation status visual, as the most recent entry is soft-locked */}
       
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'list' && styles.activeTabButton]}
-          onPress={() => setActiveTab('list')}
-        >
-          <Text style={[styles.tabText, activeTab === 'list' && styles.activeTabText]}>List</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'charts' && styles.activeTabButton]}
-          onPress={() => setActiveTab('charts')}
-        >
-          <Text style={[styles.tabText, activeTab === 'charts' && styles.activeTabText]}>Charts</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'weekly' && styles.activeTabButton]}
-          onPress={() => setActiveTab('weekly')}
-        >
-          <Text style={[styles.tabText, activeTab === 'weekly' && styles.activeTabText]}>Sound of Week</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {activeTab === 'list' ? (
-        <MoodEntryList
-          entries={moodEntries}
-          isLoading={isLoading}
-          onEntryPress={handleEntryPress}
-        />
-      ) : activeTab === 'charts' ? (
-        <MoodTrendCharts
-          entries={moodEntries}
-          isLoading={isLoading}
-        />
-      ) : (
-        <WeeklySoundTab
-          userId={user.userId}
-          weeklySelections={weeklySelections}
-          onSelectionMade={async () => {
-            const selections = await WeeklySoundService.getWeeklySelections(user.userId);
-            setWeeklySelections(selections);
-          }}
-        />
-      )}
+      {/* Tabs removed: always show list view */}
+      <MoodEntryList
+        entries={moodEntries}
+        isLoading={isLoading}
+        onEntryPress={handleEntryPress}
+      />
       
       {renderDetailModal()}
-      {renderCalendarModal()}
       
-      {/* Data Export Modal */}
-      <DataExportModal
-        visible={exportModalVisible}
-        onClose={() => setExportModalVisible(false)}
-        userId={user.userId}
-      />
+      {/* Data Export UI removed */}
     </View>
   );
 };

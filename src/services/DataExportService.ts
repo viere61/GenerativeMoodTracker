@@ -220,7 +220,8 @@ class DataExportService {
         'Emotion Tags',
         'Reflection',
         'Music Generated',
-        'Music ID'
+        'Music ID',
+        'AI Sound Label'
       ];
       
       csv += headers.join(',') + '\n';
@@ -234,7 +235,8 @@ class DataExportService {
           `"${entry.emotionTags.join(';')}"`,
           `"${entry.reflection.replace(/"/g, '""')}"`,
           entry.musicGenerated ? 'Yes' : 'No',
-          entry.musicId || ''
+          entry.musicId || '',
+          entry.promptLabel || ''
         ];
         
         csv += row.join(',') + '\n';
