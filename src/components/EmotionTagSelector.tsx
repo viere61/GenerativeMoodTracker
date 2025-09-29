@@ -366,6 +366,8 @@ const styles = StyleSheet.create({
     margin: 4,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   selectedTagButton: {
     backgroundColor: '#2196F3',

@@ -110,9 +110,9 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
       style={styles.container}
       accessible={true}
       accessibilityLabel="Influence selector"
-      accessibilityHint="Select what influenced your mood today"
+      accessibilityHint="Select what influenced your mood"
     >
-      <Text style={styles.title}>What influenced your mood today?</Text>
+      <Text style={styles.title}>What influenced your mood?</Text>
       <Text style={styles.subtitle}>Select all that apply</Text>
       
       <ScrollView 

@@ -192,7 +192,7 @@ const MoodEntryScreen = () => {
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>How are you feeling today?</Text>
+        <Text style={styles.title}>How you feel right now?</Text>
         
         {/* Simple mood rating */}
         <View style={styles.ratingContainer}>
@@ -347,7 +347,7 @@ const MoodEntryScreen = () => {
             showsVerticalScrollIndicator
             scrollEnabled={!isSliding}
           >
-            <Text style={styles.title}>How are you feeling today?</Text>
+            <Text style={styles.title}>How you feel right now?</Text>
             <View style={styles.ratingContainer}>
               <MoodRatingSelector 
                 value={moodRating} 
@@ -416,7 +416,7 @@ const MoodEntryScreen = () => {
           showsVerticalScrollIndicator
           scrollEnabled={!isSliding}
         >
-          <Text style={styles.title}>How are you feeling today?</Text>
+          <Text style={styles.title}>How you feel right now?</Text>
           <View style={styles.ratingContainer}>
             <MoodRatingSelector 
               value={moodRating} 
