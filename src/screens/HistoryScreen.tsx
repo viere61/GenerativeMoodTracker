@@ -150,6 +150,14 @@ const HistoryScreen = ({ route }: any) => {
               <Text style={styles.detailLabel}>Reflection:</Text>
               <Text style={styles.detailText}>{selectedEntry.reflection}</Text>
             </View>
+            {(selectedEntry.promptLabel || selectedEntry.promptPrefix) && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>AI Sound Label:</Text>
+                <Text style={styles.detailText}>
+                  {selectedEntry.promptLabel || (selectedEntry.promptPrefix || 'No label')}
+                </Text>
+              </View>
+            )}
             
             {(() => {
               // Determine most recent by timestamp
