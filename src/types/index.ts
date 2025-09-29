@@ -57,6 +57,10 @@ export interface MoodEntry {
   musicId?: string;
   promptPrefix?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic';
   promptLabel?: string;
+  soundReaction?: {
+    rating: -2 | -1 | 0 | 1 | 2;
+    ratedAt: number;
+  };
 }
 
 // Generated music model
@@ -75,4 +79,5 @@ export interface GeneratedMusic {
   };
   promptPrefixUsed?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic';
   promptLabelUsed?: string;
+  waveformPeaks?: number[];
 }

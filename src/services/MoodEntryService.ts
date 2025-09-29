@@ -219,6 +219,26 @@ class MoodEntryService {
   }
 
   /**
+   * Save a simple sound reaction rating for an entry
+   */
+  async updateSoundReaction(userId: string, entryId: string, rating: -2 | -1 | 0 | 1 | 2): Promise<void> {
+    try {
+      const entries = await this.getMoodEntries(userId);
+      const updated = entries.map(e => e.entryId === entryId ? { ...e, soundReaction: { rating, ratedAt: Date.now() } } : e);
+      if (isWeb) {
+        await WebStorageService.storeMoodEntries(userId, updated);
+      } else {
+        await LocalStorageManager.storeMoodEntries(userId, updated);
+      }
+    } catch (error) {
+      console.error('Failed to save sound reaction:', error);
+      throw new Error('Failed to save sound reaction');
+    }
+  }
+
+  // (Removed) updateSoundReaction
+
+  /**
    * Backfill prompt labels for existing entries and generated music
    * Sets missing labels to "No label" and prefix to 'none'
    */

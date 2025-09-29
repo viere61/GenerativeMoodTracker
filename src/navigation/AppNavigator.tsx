@@ -18,6 +18,7 @@ export type RootStackParamList = {
   Main: { screen?: keyof MainTabParamList; params?: MainTabParamList[keyof MainTabParamList] } | undefined;
   MoodEntry: undefined;
   Reflection: any;
+  // SoundReaction removed
 };
 
 export type MainTabParamList = {
@@ -90,6 +91,7 @@ const AppNavigator = () => {
           component={ReflectionScreen} 
           options={{ title: 'Write Your Reflection' }}
         />
+        
       </Stack.Navigator>
     </NavigationContainer>
   );

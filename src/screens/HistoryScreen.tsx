@@ -106,8 +106,25 @@ const HistoryScreen = ({ route }: any) => {
   // Date range filtering removed from UI (implementation kept for future use)
 
   // Render the detail modal
+  const [reactionSheetVisible, setReactionSheetVisible] = useState(false);
+  const [pendingReaction, setPendingReaction] = useState<-2 | -1 | 0 | 1 | 2 | null>(null);
+
+  const getReactionLabel = (value: -2 | -1 | 0 | 1 | 2): string => {
+    switch (value) {
+      case -2: return 'Very discordant';
+      case -1: return 'Discordant';
+      case 0: return 'Neutral';
+      case 1: return 'Concordant';
+      case 2: return 'Very concordant';
+      default: return '';
+    }
+  };
+
   const renderDetailModal = () => {
     if (!selectedEntry) return null;
+    // Determine if the selected entry is the most recent (locked sound)
+    const latest = moodEntries.reduce((acc, e) => (e.timestamp > acc.timestamp ? e : acc), moodEntries[0] || selectedEntry);
+    const isMostRecent = selectedEntry.entryId === latest.entryId;
     
     return (
       <Modal
@@ -145,6 +162,16 @@ const HistoryScreen = ({ route }: any) => {
                 ))}
               </View>
             </View>
+            {selectedEntry.influences && selectedEntry.influences.length > 0 && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Influences:</Text>
+                <View style={styles.emotionContainer}>
+                  {selectedEntry.influences.map((inf, index) => (
+                    <Text key={index} style={styles.emotionTag}>{inf}</Text>
+                  ))}
+                </View>
+              </View>
+            )}
             
             <View style={styles.detailSection}>
               <Text style={styles.detailLabel}>Reflection:</Text>
@@ -159,12 +186,7 @@ const HistoryScreen = ({ route }: any) => {
               </View>
             )}
             
-            {(() => {
-              // Determine most recent by timestamp
-              const latest = moodEntries.reduce((acc, e) => (e.timestamp > acc.timestamp ? e : acc), moodEntries[0] || selectedEntry);
-              const isMostRecent = selectedEntry.entryId === latest.entryId;
-              return selectedEntry.musicId && !isMostRecent;
-            })() && (
+            {selectedEntry.musicId && !isMostRecent && (
               <View style={styles.detailSection}>
                 <MusicPlayer 
                   musicId={selectedEntry.musicId as string}
@@ -173,21 +195,27 @@ const HistoryScreen = ({ route }: any) => {
                 />
               </View>
             )}
-            {(() => {
-              const latest = moodEntries.reduce((acc, e) => (e.timestamp > acc.timestamp ? e : acc), moodEntries[0] || selectedEntry);
-              return selectedEntry.entryId === latest.entryId;
-            })() && (
+            {isMostRecent && (
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Generated Sound:</Text>
                 <Text style={styles.lockInfo}>🔒 Locked until your next successful daily log</Text>
               </View>
             )}
+
             
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => setDetailModalVisible(false)}
+              onPress={() => {
+                if (selectedEntry?.musicId && !selectedEntry?.soundReaction && !isMostRecent) {
+                  // Close the detail modal first, then open the bottom sheet
+                  setDetailModalVisible(false);
+                  setTimeout(() => setReactionSheetVisible(true), 150);
+                } else {
+                  setDetailModalVisible(false);
+                }
+              }}
             >
-              <Text style={styles.closeButtonText}>Close</Text>
+              <Text style={styles.closeButtonText}>{selectedEntry?.musicId && !selectedEntry?.soundReaction && !isMostRecent ? 'React to sound' : 'Close'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -239,6 +267,66 @@ const HistoryScreen = ({ route }: any) => {
       />
       
       {renderDetailModal()}
+
+      {/* Reaction bottom sheet */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={reactionSheetVisible}
+        onRequestClose={() => setReactionSheetVisible(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <View style={styles.sheetContainer}>
+            <Text style={styles.sheetTitle}>How well did this sound match your mood?</Text>
+            <View style={styles.segmentContainer}>
+              {([-2, -1, 0, 1, 2] as Array<-2 | -1 | 0 | 1 | 2>).map((val, idx) => {
+                const selected = pendingReaction === val;
+                const isFirst = idx === 0;
+                const isLast = idx === 4;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.segment,
+                      isFirst && { borderTopLeftRadius: 22, borderBottomLeftRadius: 22 },
+                      isLast && { borderTopRightRadius: 22, borderBottomRightRadius: 22 },
+                      selected && styles.segmentSelected,
+                    ]}
+                    onPress={() => setPendingReaction(val)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>
+                      {/* Use compact labels to reduce clutter */}
+                      {val === -2 ? 'VD' : val === -1 ? 'D' : val === 0 ? 'N' : val === 1 ? 'C' : 'VC'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {pendingReaction !== null && (
+              <Text style={styles.selectedCaption}>{getReactionLabel(pendingReaction as -2 | -1 | 0 | 1 | 2)}</Text>
+            )}
+            <View style={styles.sheetButtonsRow}>
+              <TouchableOpacity style={styles.sheetCancel} onPress={() => { setPendingReaction(null); setReactionSheetVisible(false); }}>
+                <Text>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.sheetSave, { opacity: pendingReaction === null ? 0.5 : 1 }]} disabled={pendingReaction === null} onPress={async () => {
+                try {
+                  if (!selectedEntry || pendingReaction === null) return;
+                  await MoodEntryService.updateSoundReaction(user.userId, selectedEntry.entryId, pendingReaction);
+                  setReactionSheetVisible(false);
+                  setDetailModalVisible(false);
+                  await loadMoodEntries();
+                } catch (e) {
+                  Alert.alert('Error', 'Failed to save reaction');
+                }
+              }}>
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       {/* Data Export UI removed */}
     </View>
@@ -389,6 +477,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  reactionPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 4,
+  },
+  reactionPillSelected: {
+    backgroundColor: '#4a90e2',
+  },
+  reactionPillText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  reactionPillTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  reactionInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 8,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    marginBottom: 10,
+  },
   calendarButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -430,6 +545,98 @@ const styles = StyleSheet.create({
     color: '#777',
     fontStyle: 'italic',
     marginTop: 6,
+  },
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)'
+  },
+  sheetContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center'
+  },
+  sheetPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sheetPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    marginBottom: 8,
+  },
+  sheetPillSelected: {
+    backgroundColor: '#4a90e2',
+  },
+  sheetPillText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  sheetPillTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  sheetButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  segment: {
+    flex: 1,
+    height: 48,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#D1D5DB',
+  },
+  segmentSelected: {
+    backgroundColor: '#4a90e2',
+  },
+  segmentLabel: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '600',
+  },
+  segmentLabelSelected: {
+    color: 'white',
+  },
+  selectedCaption: {
+    marginTop: 8,
+    textAlign: 'center',
+    color: '#6B7280',
+    fontSize: 14,
+  },
+  sheetCancel: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+  },
+  sheetSave: {
+    backgroundColor: '#4a90e2',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
   },
 });
 

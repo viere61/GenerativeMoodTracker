@@ -221,7 +221,8 @@ class DataExportService {
         'Reflection',
         'Music Generated',
         'Music ID',
-        'AI Sound Label'
+        'AI Sound Label',
+        'AI Sound Reaction'
       ];
       
       csv += headers.join(',') + '\n';
@@ -236,7 +237,8 @@ class DataExportService {
           `"${entry.reflection.replace(/"/g, '""')}"`,
           entry.musicGenerated ? 'Yes' : 'No',
           entry.musicId || '',
-          entry.promptLabel || ''
+          entry.promptLabel || '',
+          (entry.soundReaction ? (entry.soundReaction.rating === 2 ? 'Very concordant' : entry.soundReaction.rating === 1 ? 'Concordant' : entry.soundReaction.rating === 0 ? 'Neutral' : entry.soundReaction.rating === -1 ? 'Discordant' : 'Very discordant') : '')
         ];
         
         csv += row.join(',') + '\n';

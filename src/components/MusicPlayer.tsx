@@ -84,6 +84,7 @@ const SliderComponent = ({
 };
 import { Ionicons } from '@expo/vector-icons';
 import MusicGenerationService from '../services/MusicGenerationService';
+import WaveformView from './WaveformView';
 import MoodEntryService from '../services/MoodEntryService';
 import { GeneratedMusic } from '../types';
 import * as FileSystem from 'expo-file-system';
@@ -505,16 +506,20 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
       
       <View style={styles.progressContainer}>
         <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-        <SliderComponent
-          style={styles.progressSlider}
-          minimumValue={0}
-          maximumValue={1}
-          value={progress}
-          minimumTrackTintColor="#4a90e2"
-          maximumTrackTintColor="#d3d3d3"
-          thumbTintColor="#4a90e2"
-          onValueChange={handleSliderChange}
-        />
+        {musicDetails?.waveformPeaks && musicDetails.waveformPeaks.length > 0 ? (
+          <WaveformView peaks={musicDetails.waveformPeaks} progress={progress} />
+        ) : (
+          <SliderComponent
+            style={styles.progressSlider}
+            minimumValue={0}
+            maximumValue={1}
+            value={progress}
+            minimumTrackTintColor="#4a90e2"
+            maximumTrackTintColor="#d3d3d3"
+            thumbTintColor="#4a90e2"
+            onValueChange={handleSliderChange}
+          />
+        )}
         <Text style={styles.timeText}>{formatTime(duration)}</Text>
       </View>
       

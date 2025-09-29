@@ -994,6 +994,29 @@ class MusicGenerationService {
       musicObject.audioUrl = audioUrl;
       musicObject.duration = 8; // Set to 8 seconds as requested
 
+      // Compute lightweight byte-level peaks for mobile (no MP3 decoder available)
+      try {
+        if (!isWeb) {
+          musicObject.waveformPeaks = this.computeByteLevelPeaks(audioArray, 96);
+        }
+      } catch (e) {
+        console.warn('🎵 Byte-level peak computation (mobile MP3) failed:', e);
+      }
+
+      // Compute simple waveform peaks (web only; mobile handled via other paths below)
+      try {
+        const isActuallyWeb = isWeb && !isReactNative && !isExpoGo;
+        if (isActuallyWeb && (audioBlob as any)._data) {
+          // Convert _data ArrayBuffer to AudioBuffer to compute peaks
+          const arrayBuffer = (audioBlob as any)._data as ArrayBuffer;
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+          musicObject.waveformPeaks = this.computeWaveformPeaks(decoded, 96);
+        }
+      } catch (e) {
+        console.warn('🎵 Waveform peak computation (web) failed:', e);
+      }
+
       // Update music parameters to reflect AI generation instead of procedural
       musicObject.musicParameters = {
         tempo: 120, // Default tempo for AI-generated ambient sounds
@@ -1060,6 +1083,17 @@ class MusicGenerationService {
         const audioUrl = await this.generateWebAudio(musicObject, 8);
         musicObject.audioUrl = audioUrl;
         musicObject.duration = 8;
+        try {
+          // Attempt to read back and compute peaks via Web Audio API
+          const response = await fetch(audioUrl);
+          const blob = await response.blob();
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const decoded = await audioContext.decodeAudioData(arrayBuffer);
+          musicObject.waveformPeaks = this.computeWaveformPeaks(decoded, 96);
+        } catch (e) {
+          console.warn('🎵 Waveform peak computation (procedural web) failed:', e);
+        }
 
         if (isDebugMode()) {
           console.log('Enhanced procedural audio generated for web');
@@ -1271,6 +1305,11 @@ class MusicGenerationService {
       writeString(36, 'data');
       view.setUint32(40, numSamples * 2, true);
 
+      // Prepare peak buckets for waveform
+      const targetBars = 96;
+      const samplesPerBar = Math.max(1, Math.floor(numSamples / targetBars));
+      const peakBuckets: number[] = new Array(targetBars).fill(0);
+
       // Generate audio data with melody
       for (let i = 0; i < numSamples; i++) {
         const time = i / sampleRate;
@@ -1302,6 +1341,11 @@ class MusicGenerationService {
         // Convert to 16-bit integer
         const sample16 = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
         view.setInt16(44 + i * 2, sample16, true);
+
+        // Track peaks for waveform
+        const bucketIndex = Math.min(targetBars - 1, Math.floor(i / samplesPerBar));
+        const amp = Math.abs(sample);
+        if (amp > peakBuckets[bucketIndex]) peakBuckets[bucketIndex] = amp;
       }
 
       console.log('Step 5: Saving to file system...');
@@ -1321,6 +1365,11 @@ class MusicGenerationService {
       await FileSystem.writeAsStringAsync(localFilePath, base64String, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      // Save normalized peaks (0..1)
+      try {
+        const maxPeak = Math.max(0.001, ...peakBuckets);
+        musicObject.waveformPeaks = peakBuckets.map(p => Math.min(1, p / maxPeak));
+      } catch {}
       // Do NOT store audio data in LocalStorageManager for mobile
       if (isDebugMode()) {
         console.log('Mood-appropriate audio file created for mobile:', localFilePath);
@@ -1635,6 +1684,47 @@ class MusicGenerationService {
   }
 
   /**
+   * Compute downsampled waveform peaks from an AudioBuffer
+   */
+  private computeWaveformPeaks(buffer: AudioBuffer, targetBars: number = 96): number[] {
+    try {
+      const channelData = buffer.numberOfChannels > 1
+        ? this.mixDownToMono(buffer)
+        : buffer.getChannelData(0);
+
+      const samplesPerBar = Math.floor(channelData.length / targetBars) || 1;
+      const peaks: number[] = [];
+      for (let i = 0; i < targetBars; i++) {
+        const start = i * samplesPerBar;
+        const end = Math.min(start + samplesPerBar, channelData.length);
+        let max = 0;
+        for (let j = start; j < end; j++) {
+          const v = Math.abs(channelData[j]);
+          if (v > max) max = v;
+        }
+        peaks.push(Math.min(1, max));
+      }
+      return peaks;
+    } catch (err) {
+      console.warn('computeWaveformPeaks failed:', err);
+      return [];
+    }
+  }
+
+  private mixDownToMono(buffer: AudioBuffer): Float32Array {
+    const length = buffer.length;
+    const tmp = new Float32Array(length);
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        tmp[i] += data[i];
+      }
+    }
+    for (let i = 0; i < length; i++) tmp[i] /= buffer.numberOfChannels;
+    return tmp;
+  }
+
+  /**
    * Convert AudioBuffer to WAV format
    */
   private audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
@@ -1676,6 +1766,31 @@ class MusicGenerationService {
     }
 
     return arrayBuffer;
+  }
+
+  /**
+   * Rough peaks from encoded bytes (fallback for mobile MP3):
+   * compute average absolute delta per chunk.
+   */
+  private computeByteLevelPeaks(bytes: Uint8Array, targetBars: number = 96): number[] {
+    const length = bytes.length;
+    const step = Math.max(1, Math.floor(length / targetBars));
+    const peaks: number[] = [];
+    for (let i = 0; i < targetBars; i++) {
+      const start = i * step;
+      const end = Math.min(start + step, length);
+      let acc = 0;
+      let count = 0;
+      for (let j = start + 1; j < end; j++) {
+        acc += Math.abs(bytes[j] - bytes[j - 1]);
+        count++;
+      }
+      const avgDelta = count > 0 ? acc / count : 0;
+      peaks.push(avgDelta);
+    }
+    // Normalize 0..1
+    const max = Math.max(1, ...peaks);
+    return peaks.map(p => Math.min(1, p / max));
   }
 
   /**
