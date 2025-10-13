@@ -57,6 +57,7 @@ export interface MoodEntry {
   musicId?: string;
   promptPrefix?: 'none' | 'ambient' | 'piano' | 'orchestral' | 'jazz' | 'acoustic';
   promptLabel?: string;
+  reflectionPrompt?: string;
   soundReaction?: {
     rating: -2 | -1 | 0 | 1 | 2;
     ratedAt: number;

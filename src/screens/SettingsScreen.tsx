@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, Button, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Switch, Button, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import DataExportModal from '../components/DataExportModal';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
 import MoodEntryService from '../services/MoodEntryService';
+import PushNotificationService from '../services/PushNotificationService';
 
 const SettingsScreen = () => {
   // State for modals
@@ -19,6 +20,78 @@ const SettingsScreen = () => {
     error, 
     updatePreference
   } = useUserPreferences();
+
+  // Local UI state for time range editor
+  const [showTimeRangeSelector, setShowTimeRangeSelector] = useState(false);
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('21:00');
+  const hour12 = (preferences?.timeFormat ?? '12h') === '12h';
+
+  const pushNotificationService = PushNotificationService.getInstance();
+
+  useEffect(() => {
+    if (preferences?.preferredTimeRange) {
+      setStartTime(preferences.preferredTimeRange.start);
+      setEndTime(preferences.preferredTimeRange.end);
+    }
+  }, [preferences?.preferredTimeRange?.start, preferences?.preferredTimeRange?.end]);
+
+  const formatTime = (hhmm: string, use12h: boolean): string => {
+    if (!hhmm) return '';
+    const [hStr, mStr] = hhmm.split(':');
+    const hour = parseInt(hStr, 10);
+    const minute = parseInt(mStr, 10) || 0;
+    if (!use12h) {
+      return `${hStr}:${mStr.padStart(2, '0')}`;
+    }
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const hour12val = hour % 12 === 0 ? 12 : hour % 12;
+    const minuteStr = mStr.padStart(2, '0');
+    return `${hour12val}:${minuteStr} ${period}`;
+  };
+
+  const updateTimeRange = async (newStartTime: string, newEndTime: string) => {
+    try {
+      // Validate: start < end and at least 2 hours apart
+      const [sH, sM] = newStartTime.split(':').map(Number);
+      const [eH, eM] = newEndTime.split(':').map(Number);
+      const startMinutes = sH * 60 + (sM || 0);
+      const endMinutes = eH * 60 + (eM || 0);
+
+      if (isNaN(startMinutes) || isNaN(endMinutes)) {
+        Alert.alert('Invalid Time Range', 'Please select valid start and end times.');
+        return;
+      }
+
+      if (startMinutes >= endMinutes) {
+        Alert.alert('Invalid Time Range', 'Start time must be before end time.');
+        return;
+      }
+
+      if (endMinutes - startMinutes < 120) {
+        Alert.alert('Invalid Time Range', 'Time range must be at least 2 hours (e.g., 13:00 - 15:00).');
+        return;
+      }
+
+      // Persist preference
+      await updatePreference('preferredTimeRange', { start: newStartTime, end: newEndTime });
+
+      // Cancel ALL existing notifications
+      await pushNotificationService.cancelAllNotifications();
+
+      // Reset and regenerate windows, schedule notifications for 30 days
+      const user = 'demo-user';
+      await TimeWindowService.resetWindow(user);
+      const multiDayWindows = await TimeWindowService.createMultiDayWindows(user, 30);
+      await pushNotificationService.scheduleMultiDayNotifications(multiDayWindows);
+
+      setShowTimeRangeSelector(false);
+      Alert.alert('Updated', 'Your preferred time range has been saved.');
+    } catch (error) {
+      console.error('Error updating time range:', error);
+      Alert.alert('Error', 'Failed to update time range. Please try again.');
+    }
+  };
   
   // Handle reset daily log status
   const handleResetDailyLog = async () => {
@@ -81,6 +154,73 @@ const SettingsScreen = () => {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Settings</Text>
       
+      {/* Time Range Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Time Range</Text>
+        <View style={styles.settingRow}>
+          <Text>Current Time Range</Text>
+          <Text style={{ fontWeight: '600' }}>{formatTime(startTime, hour12)} - {formatTime(endTime, hour12)}</Text>
+        </View>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => setShowTimeRangeSelector(!showTimeRangeSelector)}>
+          <Text style={styles.primaryButtonText}>{showTimeRangeSelector ? 'Cancel' : 'Edit Time Range'}</Text>
+        </TouchableOpacity>
+
+        {showTimeRangeSelector && (
+          <View style={{ marginTop: 12 }}>
+            <Text style={{ textAlign: 'center', color: '#666', marginBottom: 10 }}>
+              Choose when you're typically available. We'll randomly select a 1-hour window within this range each day.
+            </Text>
+            <Text style={styles.timeLabel}>Start Time</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 50 }}>
+              <View style={{ flexDirection: 'row', paddingHorizontal: 10 }}>
+                {Array.from({ length: 24 }, (_, i) => {
+                  const hour = i.toString().padStart(2, '0');
+                  const time = `${hour}:00`;
+                  const selected = startTime === time;
+                  return (
+                    <TouchableOpacity
+                      key={`start-${time}`}
+                      style={[styles.timeButton, selected && styles.timeButtonSelected]}
+                      onPress={() => setStartTime(time)}
+                    >
+                      <Text style={[styles.timeButtonText, selected && styles.timeButtonTextSelected]}>
+                        {formatTime(time, hour12)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <Text style={styles.timeLabel}>End Time</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 50 }}>
+              <View style={{ flexDirection: 'row', paddingHorizontal: 10 }}>
+                {Array.from({ length: 24 }, (_, i) => {
+                  const hour = i.toString().padStart(2, '0');
+                  const time = `${hour}:00`;
+                  const selected = endTime === time;
+                  return (
+                    <TouchableOpacity
+                      key={`end-${time}`}
+                      style={[styles.timeButton, selected && styles.timeButtonSelected]}
+                      onPress={() => setEndTime(time)}
+                    >
+                      <Text style={[styles.timeButtonText, selected && styles.timeButtonTextSelected]}>
+                        {formatTime(time, hour12)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity style={[styles.primaryButton, { marginTop: 12 }]} onPress={() => updateTimeRange(startTime, endTime)}>
+              <Text style={styles.primaryButtonText}>Save Time Range</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
       {/* Time Format Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Time Format</Text>
@@ -96,30 +236,28 @@ const SettingsScreen = () => {
         </Text>
       </View>
 
-      {/* Prompt Prefix Section */}
+      {/* AI Sound Prompt (Randomized) */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>AI Sound Prompt</Text>
-        <Text style={{ marginBottom: 8, color: '#666' }}>Choose a label to prepend to your reflection for AI sound generation.</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', opacity: 0.5 }}>
+        <Text style={{ marginBottom: 10, color: '#444' }}>
+          A musical label is chosen at random for each AI sound generation. Examples:
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {[
-            { key: 'none', label: 'No label' },
-            { key: 'ambient', label: 'Ambient soundscape' },
-            { key: 'piano', label: 'Piano solo' },
-            { key: 'orchestral', label: 'Orchestral' },
-            { key: 'jazz', label: 'Jazz music' },
-            { key: 'acoustic', label: 'Acoustic guitar' },
-          ].map(opt => (
-            <View key={opt.key} style={{ marginRight: 10, marginBottom: 10 }}>
-              <Button
-                title={opt.label}
-                disabled={true}
-                onPress={() => {}}
-              />
+            'No label',
+            'Ambient soundscape',
+            'Piano solo',
+            'Orchestral',
+            'Jazz music',
+            'Acoustic guitar',
+          ].map((label, idx) => (
+            <View key={idx} style={styles.pill}>
+              <Text style={styles.pillText}>{label}</Text>
             </View>
           ))}
         </View>
-        <Text style={{ marginTop: 6, color: '#666' }}>
-          A random label will be chosen automatically for each generation.
+        <Text style={{ marginTop: 8, color: '#666' }}>
+          You don’t need to choose anything here — it’s automatic.
         </Text>
       </View>
 
@@ -328,6 +466,60 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 4,
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  timeLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 8,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  timeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginHorizontal: 4,
+  },
+  timeButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  timeButtonText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  timeButtonTextSelected: {
+    color: 'white',
+  },
+  pill: {
+    backgroundColor: '#eef2ff',
+    borderColor: '#c7d2fe',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  pillText: {
+    color: '#1f2937',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 

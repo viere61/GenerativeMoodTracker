@@ -25,7 +25,8 @@ class MoodEntryService {
     moodRating: number,
     emotionTags: string[] = [],
     influences: string[] = [],
-    reflection: string = ''
+    reflection: string = '',
+    reflectionPrompt?: string
   ): Promise<MoodEntry> {
     // Ensure LocalStorageManager is initialized for mobile
     if (!isWeb) {
@@ -62,6 +63,9 @@ class MoodEntryService {
       reflection,
       musicGenerated: false
     };
+    if (reflectionPrompt) {
+      (newEntry as any).reflectionPrompt = reflectionPrompt;
+    }
     
     try {
       // Get existing entries

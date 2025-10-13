@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Animated,
+  Easing,
   Alert,
   Share,
 } from 'react-native';
@@ -19,7 +20,9 @@ const SliderComponent = ({
   minimumTrackTintColor, 
   maximumTrackTintColor, 
   thumbTintColor, 
-  onValueChange 
+  onValueChange,
+  onSlidingStart,
+  onSlidingComplete,
 }: {
   style: any;
   minimumValue?: number; // Not used but kept for API compatibility
@@ -29,6 +32,8 @@ const SliderComponent = ({
   maximumTrackTintColor: string;
   thumbTintColor: string;
   onValueChange: (value: number) => void;
+  onSlidingStart?: () => void;
+  onSlidingComplete?: (value: number) => void;
 }) => {
   // Calculate the width of the container for touch position calculation
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -50,14 +55,25 @@ const SliderComponent = ({
     // Call the onValueChange callback
     onValueChange(newValue);
   };
+  const handleGrant = () => {
+    onSlidingStart && onSlidingStart();
+  };
+  const handleRelease = (event: any) => {
+    if (containerWidth === 0) return;
+    const touchX = event.nativeEvent.locationX;
+    let newValue = (touchX / containerWidth);
+    newValue = Math.max(0, Math.min(1, newValue));
+    onSlidingComplete && onSlidingComplete(newValue);
+  };
   
   return (
     <View 
       style={[style, { height: 40, justifyContent: 'center' }]}
       onLayout={handleLayout}
       onStartShouldSetResponder={() => true}
-      onResponderGrant={handleTouch}
+      onResponderGrant={handleGrant}
       onResponderMove={handleTouch}
+      onResponderRelease={handleRelease}
     >
       <View style={{ height: 2, backgroundColor: maximumTrackTintColor, width: '100%' }} />
       <View 
@@ -71,8 +87,9 @@ const SliderComponent = ({
       <View
         style={{
           position: 'absolute',
-            left: `${value * 100}%`,
-            marginLeft: value <= 0 ? 0 : -10,
+          left: `${value * 100}%`,
+          // Avoid initial visual jump: only center the thumb when it is far enough from the left edge
+          marginLeft: containerWidth > 0 && (value * containerWidth) <= 10 ? 0 : -10,
           width: 20,
           height: 20,
           borderRadius: 10,
@@ -84,7 +101,6 @@ const SliderComponent = ({
 };
 import { Ionicons } from '@expo/vector-icons';
 import MusicGenerationService from '../services/MusicGenerationService';
-import WaveformView from './WaveformView';
 import MoodEntryService from '../services/MoodEntryService';
 import { GeneratedMusic } from '../types';
 import * as FileSystem from 'expo-file-system';
@@ -111,6 +127,10 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isRepeatEnabled, setIsRepeatEnabled] = useState<boolean>(true);
+  const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
+  const lastUpdateRef = useRef<number | null>(null);
+  const progressAnim = useRef(new Animated.Value(0));
+  const [progressBarWidth, setProgressBarWidth] = useState<number>(0);
   const [volume, setVolume] = useState<number>(1.0); // Default to full volume
   
   
@@ -132,10 +152,9 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   // Set up progress update interval
   useEffect(() => {
     const progressInterval = setInterval(() => {
-      if (isPlaying) {
-        updateProgress();
-      }
-    }, 1000);
+      // Update progress at a higher cadence for smoother UI
+      updateProgress();
+    }, 100);
     
     // Clean up interval on unmount or when isPlaying changes
     return () => {
@@ -154,6 +173,16 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   useEffect(() => {
     MusicGenerationService.setRepeatMode(true);
   }, []);
+
+  // Animate progress changes for ultra-smooth bar movement
+  useEffect(() => {
+    Animated.timing(progressAnim.current, {
+      toValue: Math.max(0, Math.min(1, progress)),
+      duration: 120,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
   
   // Update status message when playback state changes
   useEffect(() => {
@@ -237,6 +266,10 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
     try {
       const playbackStatus = MusicGenerationService.getPlaybackStatus();
       console.log('Progress update - playbackStatus:', playbackStatus, 'musicId:', musicId, 'isPlaying:', isPlaying);
+      // Do not override UI while user is dragging the slider
+      if (isScrubbing) {
+        return;
+      }
       
       // If this music is playing, update the progress
       if (playbackStatus.isPlaying && playbackStatus.currentMusicId === musicId) {
@@ -251,25 +284,25 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
           
           // Update progress percentage
           if (duration > 0) {
-            const newProgress = position / duration;
-            setProgress(newProgress);
-            console.log('Updated progress:', newProgress, 'position:', position, 'duration:', duration);
+            // Smoothly lerp to target progress to avoid jumps
+            const target = position / duration;
+            setProgress(prev => {
+              const delta = target - prev;
+              const step = Math.abs(delta) > 0.05 ? prev + delta * 0.4 : target;
+              return Math.max(0, Math.min(1, step));
+            });
+            console.log('Updated progress:', target, 'position:', position, 'duration:', duration);
           }
-          
-          // Check if we've reached the end of the track
-          if (position >= duration) {
-            console.log('Reached end of track, stopping...');
-            handleStop();
-          }
+          // Do NOT stop here; when looping is enabled the native player restarts automatically.
+          // We avoid interfering to ensure infinite looping.
         } else {
           console.log('Position is null, using fallback...');
           // Fallback if we can't get the actual position
           setCurrentTime(prev => {
             const newTime = prev + 1;
+            // When looping is enabled, wrap to 0 instead of stopping
             if (newTime >= duration) {
-              // Stop playback when we reach the end
-              handleStop();
-              return 0;
+              return isRepeatEnabled ? 0 : 0; // keep UI at 0; stop handled below only when not looping
             }
             return newTime;
           });
@@ -281,6 +314,10 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         }
       } else {
         console.log('This music is not playing or not the current music');
+        // Keep position if paused
+        if (duration > 0) {
+          setProgress(currentTime / duration);
+        }
       }
     } catch (error) {
       console.error('Error updating progress:', error);
@@ -319,10 +356,12 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         console.log('Comparing musicId:', musicId, 'with currentMusicId:', playbackStatus.currentMusicId);
         
         let success;
+        let resumed = false;
         if (playbackStatus.currentMusicId === musicId && playbackStatus.isPlaying === false) {
           // Resume if it's the same music but paused
           console.log('Resuming music...');
           success = await MusicGenerationService.resumeMusic();
+          resumed = true;
         } else {
           // Start playing if it's different music or not currently playing
           console.log('Starting new music playback...');
@@ -335,8 +374,11 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         
         if (success) {
           setIsPlaying(true);
-          setCurrentTime(0);
-          setProgress(0);
+          // Only reset position when starting a fresh playback, not when resuming
+          if (!resumed) {
+            setCurrentTime(0);
+            setProgress(0);
+          }
           console.log('Music playback started successfully');
         } else {
           console.log('Music playback failed');
@@ -377,17 +419,28 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   };
   
   // Handle slider change
-  const handleSliderChange = async (value: number) => {
+  const handleSliderChange = (value: number) => {
     // Update the UI immediately for responsiveness
     setProgress(value);
     const newTime = value * duration;
     setCurrentTime(newTime);
-    
-    // Seek to the new position in the audio
+  };
+
+  const handleSlideStart = () => {
+    // Pause updates while sliding to avoid conflicts
+    setIsScrubbing(true);
+  };
+
+  const handleSlideComplete = async (value: number) => {
+    const newTime = value * duration;
     try {
       await MusicGenerationService.seekToPosition(newTime);
+      // After a successful seek, release scrubbing flag so periodic updates resume
+      setIsScrubbing(false);
     } catch (error) {
       console.error('Error seeking to position:', error);
+      // Even if seek fails, release scrubbing to avoid locking UI
+      setIsScrubbing(false);
     }
   };
   
@@ -506,20 +559,21 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
       
       <View style={styles.progressContainer}>
         <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-        {musicDetails?.waveformPeaks && musicDetails.waveformPeaks.length > 0 ? (
-          <WaveformView peaks={musicDetails.waveformPeaks} progress={progress} />
-        ) : (
-          <SliderComponent
-            style={styles.progressSlider}
-            minimumValue={0}
-            maximumValue={1}
-            value={progress}
-            minimumTrackTintColor="#4a90e2"
-            maximumTrackTintColor="#d3d3d3"
-            thumbTintColor="#4a90e2"
-            onValueChange={handleSliderChange}
+        <View
+          style={[styles.progressSlider, { height: 40, justifyContent: 'center' }]}
+          onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+        >
+          <View style={{ height: 2, backgroundColor: '#d3d3d3', width: '100%' }} />
+          <Animated.View
+            style={{
+              position: 'absolute',
+              height: 2,
+              backgroundColor: '#4a90e2',
+              width: progressBarWidth > 0 ? Animated.multiply(progressAnim.current, progressBarWidth) : 0,
+            }}
           />
-        )}
+          {/* No thumb => visually communicates non-interactive */}
+        </View>
         <Text style={styles.timeText}>{formatTime(duration)}</Text>
       </View>
       

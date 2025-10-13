@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Button, ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, Button, ActivityIndicator, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -20,9 +20,8 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [showTimeRangeSelector, setShowTimeRangeSelector] = useState(false);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('21:00');
+  const [showDevControls, setShowDevControls] = useState(false);
+  // Time range UI moved to Settings
   const [timeWindowStatus, setTimeWindowStatus] = useState<{
     canLog: boolean;
     message: string;
@@ -34,19 +33,7 @@ const HomeScreen = () => {
   });
   const [hour12, setHour12] = useState<boolean>(true);
 
-  const formatTime = (hhmm: string, use12h: boolean): string => {
-    if (!hhmm) return '';
-    const [hStr, mStr] = hhmm.split(':');
-    const hour = parseInt(hStr, 10);
-    const minute = parseInt(mStr, 10) || 0;
-    if (!use12h) {
-      return `${hStr}:${mStr.padStart(2, '0')}`;
-    }
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const hour12val = hour % 12 === 0 ? 12 : hour % 12;
-    const minuteStr = mStr.padStart(2, '0');
-    return `${hour12val}:${minuteStr} ${period}`;
-  };
+  // formatTime no longer needed on Home; kept in Settings
 
   const pushNotificationService = PushNotificationService.getInstance();
 
@@ -76,9 +63,7 @@ const HomeScreen = () => {
           });
         }
 
-        // Set times from preferences
-        setStartTime(preferences.preferredTimeRange.start);
-        setEndTime(preferences.preferredTimeRange.end);
+        // Update time format only (time range UI is in Settings)
         setHour12((preferences.timeFormat ?? '12h') === '12h');
 
         // Check time window status
@@ -98,74 +83,7 @@ const HomeScreen = () => {
     initializeApp();
   }, []);
 
-  // Function to update time range preferences
-  const updateTimeRange = async (newStartTime: string, newEndTime: string) => {
-    try {
-      // Validate: start < end and at least 2 hours apart
-      const [sH, sM] = newStartTime.split(':').map(Number);
-      const [eH, eM] = newEndTime.split(':').map(Number);
-      const startMinutes = sH * 60 + (sM || 0);
-      const endMinutes = eH * 60 + (eM || 0);
-
-      if (isNaN(startMinutes) || isNaN(endMinutes)) {
-        Alert.alert('Invalid Time Range', 'Please select valid start and end times.');
-        return;
-      }
-
-      if (startMinutes >= endMinutes) {
-        Alert.alert('Invalid Time Range', 'Start time must be before end time.');
-        return;
-      }
-
-      if (endMinutes - startMinutes < 120) {
-        Alert.alert('Invalid Time Range', 'Time range must be at least 2 hours (e.g., 13:00 - 15:00).');
-        return;
-      }
-
-      setLoading(true);
-      const userId = 'demo-user';
-
-      // Update preferences
-      await UserPreferencesService.updatePreferredTimeRange(userId, {
-        start: newStartTime,
-        end: newEndTime
-      });
-
-      // Update local state
-      setStartTime(newStartTime);
-      setEndTime(newEndTime);
-
-      // Cancel ALL existing notifications (more aggressive)
-      await pushNotificationService.cancelAllNotifications();
-      
-      // Reset time window for today (this will also clear all future date-specific windows)
-      const newWindow = await TimeWindowService.resetWindow(userId);
-      console.log('✅ Updated today\'s window with new time range');
-
-      // Create multi-day windows with new time range (7 days including today)
-      const multiDayWindows = await TimeWindowService.createMultiDayWindows(userId, 30);
-      console.log('✅ Created', multiDayWindows.length, 'multi-day windows with new time range');
-
-      // Schedule notifications for all future windows
-      const scheduleResult = await pushNotificationService.scheduleMultiDayNotifications(multiDayWindows);
-      
-      if (scheduleResult.success) {
-        console.log('✅ Multi-day notifications scheduled successfully:', scheduleResult.scheduledCount, 'notifications');
-      } else {
-        console.log('⚠️ Some notifications failed to schedule:', scheduleResult.errors);
-      }
-
-      // Check new time window
-      await checkTimeWindow();
-
-      setShowTimeRangeSelector(false);
-    } catch (error) {
-      console.error('Error updating time range:', error);
-      Alert.alert('Error', 'Failed to update time range. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Time range update moved to Settings
 
   // Function to check the current time window status
   const checkTimeWindow = useCallback(async () => {
@@ -332,100 +250,7 @@ const HomeScreen = () => {
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
-      <Text style={styles.title}>Generative Mood Tracker</Text>
-
-      {/* Current Time Range Display */}
-      <View style={styles.timeRangeDisplay}>
-        <Text style={styles.timeRangeLabel}>Current Time Range:</Text>
-        <Text style={styles.timeRangeText}>{formatTime(startTime, hour12)} - {formatTime(endTime, hour12)}</Text>
-        <TouchableOpacity
-          style={styles.editTimeButton}
-          onPress={() => setShowTimeRangeSelector(!showTimeRangeSelector)}
-        >
-          <Text style={styles.editTimeButtonText}>
-            {showTimeRangeSelector ? 'Cancel' : 'Edit Time Range'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Time Range Selector */}
-      {showTimeRangeSelector && (
-        <View style={styles.timeRangeSelector}>
-          <Text style={styles.selectorTitle}>Select Your Preferred Time Range</Text>
-          <Text style={styles.selectorDescription}>
-            Choose when you're typically available. We'll randomly select a 1-hour window within this range each day.
-          </Text>
-
-          <View style={styles.timePickerRow}>
-            <Text style={styles.timeLabel}>Start Time:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScrollView}>
-              <View style={styles.timeButtons}>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = i.toString().padStart(2, '0');
-                  const time = `${hour}:00`;
-                  return (
-                    <TouchableOpacity
-                      key={time}
-                      style={[
-                        styles.timeButton,
-                        startTime === time && styles.selectedTimeButton
-                      ]}
-                      onPress={() => setStartTime(time)}
-                    >
-                      <Text style={[
-                        styles.timeButtonText,
-                        startTime === time && styles.selectedTimeButtonText
-                      ]}>
-                         {formatTime(time, hour12)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-
-          <View style={styles.timePickerRow}>
-            <Text style={styles.timeLabel}>End Time:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScrollView}>
-              <View style={styles.timeButtons}>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = i.toString().padStart(2, '0');
-                  const time = `${hour}:00`;
-                  return (
-                    <TouchableOpacity
-                      key={time}
-                      style={[
-                        styles.timeButton,
-                        endTime === time && styles.selectedTimeButton
-                      ]}
-                      onPress={() => setEndTime(time)}
-                    >
-                      <Text style={[
-                        styles.timeButtonText,
-                        endTime === time && styles.selectedTimeButtonText
-                      ]}>
-                         {formatTime(time, hour12)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-
-          <Text style={styles.selectedRange}>
-            Your window will be between {formatTime(startTime, hour12)} and {formatTime(endTime, hour12)}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={() => updateTimeRange(startTime, endTime)}
-          >
-            <Text style={styles.saveButtonText}>Save Time Range</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Time range UI moved to Settings */}
 
       {!notificationsEnabled && (
         <TouchableOpacity
@@ -445,8 +270,8 @@ const HomeScreen = () => {
         </View>
       ) : timeWindowStatus.canLog ? (
         <View style={styles.windowOpen}>
-          <Text style={styles.windowText}>Your mood logging window is open!</Text>
-                      <Text style={styles.windowTimeText}>
+          <Text style={styles.windowText}>Your mood logging window is open</Text>
+          <Text style={styles.windowTimeText}>
               Available until {timeWindowStatus.windowEnd ? new Date(timeWindowStatus.windowEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 }) : ''}
             </Text>
           <Button
@@ -469,32 +294,38 @@ const HomeScreen = () => {
             />
           )}
 
-          {/* Removed yellow next window info per request */}
+          {/* Next window info removed per request */}
           
         </View>
       )}
 
-      {/* This button would be in settings in the real app */}
+      {/* Developer controls (collapsed by default) */}
       <View style={styles.devControls}>
-        <Text style={styles.devTitle}>Developer Controls</Text>
-        <View style={styles.buttonRow}>
-          <Button
-            title="Reset Time Window"
-            onPress={handleResetTimeWindow}
-          />
-        </View>
-        <View style={styles.buttonRow}>
-          <Button
-            title="Test Notification"
-            onPress={handleTestNotification}
-          />
-        </View>
-        <View style={styles.buttonRow}>
-          <Button
-            title="🧪 Test Scheduled Notification (2 min)"
-            onPress={handleTestScheduledNotification}
-          />
-        </View>
+        <TouchableOpacity onPress={() => setShowDevControls(!showDevControls)} style={styles.devToggle}>
+          <Text style={styles.devTitle}>Developer Controls {showDevControls ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {showDevControls && (
+          <View>
+            <View style={styles.buttonRow}>
+              <Button
+                title="Reset Time Window"
+                onPress={handleResetTimeWindow}
+              />
+            </View>
+            <View style={styles.buttonRow}>
+              <Button
+                title="Test Notification"
+                onPress={handleTestNotification}
+              />
+            </View>
+            <View style={styles.buttonRow}>
+              <Button
+                title="🧪 Test Scheduled Notification (2 min)"
+                onPress={handleTestScheduledNotification}
+              />
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Music Generation Debug Panel removed to prevent automatic tests */}
@@ -510,11 +341,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
+  // Title removed for a cleaner headerless look
   timeRangeDisplay: {
     backgroundColor: '#f8f9fa',
     padding: 15,
@@ -647,39 +474,38 @@ const styles = StyleSheet.create({
   },
   windowOpen: {
     padding: 20,
-    backgroundColor: '#e6f7ff',
-    borderRadius: 10,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 12,
     alignItems: 'center',
     width: '100%',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
   },
   windowClosed: {
     padding: 20,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
     alignItems: 'center',
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   windowText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   windowTimeText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 15,
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
   },
   messageText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 15,
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
     textAlign: 'center',
   },
   countdownText: {
@@ -687,17 +513,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   devControls: {
-    marginTop: 30,
-    padding: 15,
-    backgroundColor: '#ffe6e6',
-    borderRadius: 10,
-    alignItems: 'center',
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    alignItems: 'stretch',
     width: '100%',
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
   devTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  devToggle: {
+    alignSelf: 'center',
   },
   buttonRow: {
     marginVertical: 5,

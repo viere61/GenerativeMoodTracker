@@ -20,27 +20,29 @@ const ReflectionScreen: React.FC = () => {
   const [reflection, setReflection] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getWeeklyPromptTitle = () => {
-    const day = new Date().getDay();
-    switch (day) {
-      case 1:
-        return 'Monday: Share one object that encapsulates your feeling.';
-      case 2:
-        return 'Tuesday: Share three words that capture your day.';
-      case 3:
-        return 'Wednesday: What environment matches your current state of mind?';
-      case 4:
-        return 'Thursday: How does your mood feel in your body right now?';
-      case 5:
-        return 'Friday: If your mood were weather, what would it be?';
-      case 6:
-        return 'Saturday: Journal whatever you want!';
-      case 0:
-      default:
-        return 'Sunday: Journal whatever you want!';
-    }
-  };
-  const weeklyPromptTitle = getWeeklyPromptTitle();
+  const promptPool = [
+    'Share three words that capture your day.',
+    'Share one object that encapsulates your feeling.',
+    'What environment matches your current state of mind?',
+    'If your mood were weather, what would it be?',
+    'What is the rhythm of your current mood?',
+    'Describe your mood as a texture.',
+    'Describe your mood as a room in your dream house.',
+    'If your current mood were a piece of music, what would it sound like?',
+    'If your current mood were a dance move, how would it go?',
+    'What do you hope you remember from today?',
+    'Share a food that encapsulates your feeling.',
+    'If your mood could speak, what would it say to you?',
+    'What word or phrase is echoing in your mind today?',
+    'What kind of architecture describes your current mood?',
+    'What mode of transportation represents your current mood?',
+    'If you were to be an animal today, what would it be?',
+    'What ice cream flavors match your day today?',
+    'Describe how you are feeling today based on a travel destination.',
+    'Describe the sound you want to hear right now.',
+    'What color is your mood today?',
+  ];
+  const [randomPrompt] = useState(() => promptPool[Math.floor(Math.random() * promptPool.length)]);
 
   const handleSubmit = async () => {
     try {
@@ -51,7 +53,8 @@ const ReflectionScreen: React.FC = () => {
         moodRating,
         emotionTags,
         influences,
-        reflection
+        reflection,
+        randomPrompt
       );
 
       try {
@@ -80,9 +83,9 @@ const ReflectionScreen: React.FC = () => {
       {(Platform.OS === 'ios' || Platform.OS === 'android') ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
           <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20 }} keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>{weeklyPromptTitle}</Text>
+            <Text style={styles.title}>{randomPrompt}</Text>
             <View>
-              <ReflectionTextInput value={reflection} onChange={setReflection} minLength={0} showSubtitle={false} />
+              <ReflectionTextInput value={reflection} onChange={setReflection} minLength={0} showSubtitle={false} placeholderText={randomPrompt} />
             </View>
             <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.disabledButton]} onPress={handleSubmit} disabled={isSubmitting}>
               <Text style={styles.submitButtonText}>Done</Text>
@@ -91,9 +94,9 @@ const ReflectionScreen: React.FC = () => {
         </KeyboardAvoidingView>
       ) : (
         <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20 }} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>{weeklyPromptTitle}</Text>
+          <Text style={styles.title}>{randomPrompt}</Text>
           <View>
-            <ReflectionTextInput value={reflection} onChange={setReflection} minLength={0} showSubtitle={false} />
+            <ReflectionTextInput value={reflection} onChange={setReflection} minLength={0} showSubtitle={false} placeholderText={randomPrompt} />
           </View>
           <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.disabledButton]} onPress={handleSubmit} disabled={isSubmitting}>
             <Text style={styles.submitButtonText}>Done</Text>

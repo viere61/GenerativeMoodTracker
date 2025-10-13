@@ -1873,7 +1873,11 @@ class MusicGenerationService {
         if (storedAudioData) {
           // Convert base64 back to blob and create new URL using our safe utility
           const audioArray = base64ToUint8Array(storedAudioData);
-          const audioBlob = new Blob([audioArray], { type: 'audio/wav' });
+          // Copy to a real ArrayBuffer to satisfy BlobPart typing
+          const ab = new ArrayBuffer(audioArray.byteLength);
+          const view = new Uint8Array(ab);
+          view.set(audioArray);
+          const audioBlob = new Blob([ab], { type: 'audio/wav' });
           const newBlobUrl = URL.createObjectURL(audioBlob);
 
           console.log('Regenerated blob URL:', newBlobUrl);
@@ -1889,16 +1893,28 @@ class MusicGenerationService {
 
       console.log('Audio loaded successfully');
 
+      // Ensure looping behavior is controlled by the native player to avoid timing races
+      try {
+        await this.soundObject.setIsLoopingAsync(this.isRepeatEnabled);
+        console.log('Looping mode set to:', this.isRepeatEnabled);
+      } catch (e) {
+        console.warn('Failed to set looping mode (non-fatal):', e);
+      }
+
       // Set up playback status update callback
       this.soundObject.setOnPlaybackStatusUpdate(async status => {
         console.log('Playback status update:', status);
-        if (status.isLoaded && status.didJustFinish) {
-          if (this.isRepeatEnabled && this.currentMusicId && this.soundObject) {
-            // If repeat is enabled, restart the track
-            await this.soundObject.setPositionAsync(0);
-            await this.soundObject.playAsync();
+        if (!status.isLoaded) return;
+        if (status.didJustFinish) {
+          if (this.isRepeatEnabled) {
+            // Force-loop as a backstop in case native loop flag is ignored on some platforms
+            try {
+              await this.soundObject?.setPositionAsync(0);
+              await this.soundObject?.playAsync();
+            } catch (e) {
+              console.warn('Backstop loop restart failed (non-fatal):', e);
+            }
           } else {
-            // Otherwise, stop playback
             this.isPlaying = false;
             this.currentMusicId = null;
           }
@@ -2043,6 +2059,14 @@ class MusicGenerationService {
    */
   setRepeatMode(enabled: boolean): void {
     this.isRepeatEnabled = enabled;
+    // Update native loop as well if a sound is loaded
+    try {
+      if (this.soundObject) {
+        this.soundObject.setIsLoopingAsync(enabled);
+      }
+    } catch (e) {
+      console.warn('Failed to update looping mode (non-fatal):', e);
+    }
   }
 
   /**

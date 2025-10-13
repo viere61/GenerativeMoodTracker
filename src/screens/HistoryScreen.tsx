@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, LayoutChangeEvent, GestureResponderEvent } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MoodEntryService from '../services/MoodEntryService';
 import MoodEntryList from '../components/MoodEntryList';
@@ -107,7 +107,8 @@ const HistoryScreen = ({ route }: any) => {
 
   // Render the detail modal
   const [reactionSheetVisible, setReactionSheetVisible] = useState(false);
-  const [pendingReaction, setPendingReaction] = useState<-2 | -1 | 0 | 1 | 2 | null>(null);
+  const [pendingReaction, setPendingReaction] = useState<-2 | -1 | 0 | 1 | 2 | null>(0);
+  const [sliderValue, setSliderValue] = useState<number>(0.5);
 
   const getReactionLabel = (value: -2 | -1 | 0 | 1 | 2): string => {
     switch (value) {
@@ -177,6 +178,12 @@ const HistoryScreen = ({ route }: any) => {
               <Text style={styles.detailLabel}>Reflection:</Text>
               <Text style={styles.detailText}>{selectedEntry.reflection}</Text>
             </View>
+            {selectedEntry.reflectionPrompt && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Prompt Asked:</Text>
+                <Text style={styles.detailText}>{selectedEntry.reflectionPrompt}</Text>
+              </View>
+            )}
             {(selectedEntry.promptLabel || selectedEntry.promptPrefix) && (
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>AI Sound Label:</Text>
@@ -278,34 +285,24 @@ const HistoryScreen = ({ route }: any) => {
         <View style={styles.sheetOverlay}>
           <View style={styles.sheetContainer}>
             <Text style={styles.sheetTitle}>How well did this sound match your mood?</Text>
-            <View style={styles.segmentContainer}>
-              {([-2, -1, 0, 1, 2] as Array<-2 | -1 | 0 | 1 | 2>).map((val, idx) => {
-                const selected = pendingReaction === val;
-                const isFirst = idx === 0;
-                const isLast = idx === 4;
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.segment,
-                      isFirst && { borderTopLeftRadius: 22, borderBottomLeftRadius: 22 },
-                      isLast && { borderTopRightRadius: 22, borderBottomRightRadius: 22 },
-                      selected && styles.segmentSelected,
-                    ]}
-                    onPress={() => setPendingReaction(val)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>
-                      {/* Use compact labels to reduce clutter */}
-                      {val === -2 ? 'VD' : val === -1 ? 'D' : val === 0 ? 'N' : val === 1 ? 'C' : 'VC'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <Text style={styles.selectedCaption}>{getReactionLabel(Math.max(-2, Math.min(2, Math.round(sliderValue * 4) - 2)) as -2 | -1 | 0 | 1 | 2)}</Text>
+            <View style={styles.reactionSliderWrap}>
+              <ReactionSlider
+                value={sliderValue}
+                onChange={(val) => {
+                  setSliderValue(val);
+                }}
+                onRelease={(val) => {
+                  const mapped = Math.max(-2, Math.min(2, Math.round(val * 4) - 2)) as -2 | -1 | 0 | 1 | 2;
+                  setPendingReaction(mapped);
+                  setSliderValue((mapped + 2) / 4);
+                }}
+              />
+              <View style={styles.reactionExtremesRow}>
+                <Text style={styles.extremeText}>Very discordant</Text>
+                <Text style={styles.extremeText}>Very concordant</Text>
+              </View>
             </View>
-            {pendingReaction !== null && (
-              <Text style={styles.selectedCaption}>{getReactionLabel(pendingReaction as -2 | -1 | 0 | 1 | 2)}</Text>
-            )}
             <View style={styles.sheetButtonsRow}>
               <TouchableOpacity style={styles.sheetCancel} onPress={() => { setPendingReaction(null); setReactionSheetVisible(false); }}>
                 <Text>Cancel</Text>
@@ -329,6 +326,52 @@ const HistoryScreen = ({ route }: any) => {
       </Modal>
       
       {/* Data Export UI removed */}
+    </View>
+  );
+};
+
+// Minimal custom slider for reaction (0..1)
+const ReactionSlider = ({ value, onChange, onRelease }: { value: number; onChange: (v: number) => void; onRelease?: (v: number) => void }) => {
+  const clamped = Math.max(0, Math.min(1, value || 0));
+  const [trackWidth, setTrackWidth] = React.useState(0);
+  const startPageXRef = React.useRef(0);
+  const startValueRef = React.useRef(clamped);
+
+  const handleLayout = (e: LayoutChangeEvent) => {
+    setTrackWidth(e.nativeEvent.layout.width);
+  };
+
+  const computeValueFromDelta = (pageX: number) => {
+    if (trackWidth <= 0) return clamped;
+    const dx = pageX - startPageXRef.current;
+    const next = startValueRef.current + dx / trackWidth;
+    return Math.max(0, Math.min(1, next));
+  };
+
+  return (
+    <View
+      style={{ paddingVertical: 14 }}
+      onStartShouldSetResponder={() => true}
+      onResponderGrant={(e) => {
+        startPageXRef.current = e.nativeEvent.pageX;
+        startValueRef.current = clamped;
+      }}
+      onResponderMove={(e) => onChange(computeValueFromDelta(e.nativeEvent.pageX))}
+      onResponderRelease={(e) => {
+        const v = computeValueFromDelta(e.nativeEvent.pageX);
+        onChange(v);
+        onRelease && onRelease(v);
+      }}
+    >
+      <View style={styles.sliderTrack} onLayout={handleLayout}>
+        <View style={[styles.sliderFill, { width: trackWidth > 0 ? Math.round(clamped * trackWidth) : `${clamped * 100}%` }]} />
+        {trackWidth > 0 && (
+          <View style={[
+            styles.sliderThumb,
+            { left: Math.round(clamped * trackWidth), transform: [{ translateX: -10 }] },
+          ]} />
+        )}
+      </View>
     </View>
   );
 };
@@ -592,39 +635,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 8,
   },
-  segmentContainer: {
+  reactionSliderWrap: {
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  reactionExtremesRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 22,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
-  segment: {
-    flex: 1,
-    height: 48,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#D1D5DB',
-  },
-  segmentSelected: {
-    backgroundColor: '#4a90e2',
-  },
-  segmentLabel: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '600',
-  },
-  segmentLabelSelected: {
-    color: 'white',
+  extremeText: {
+    color: '#6B7280',
+    fontSize: 12,
   },
   selectedCaption: {
-    marginTop: 8,
+    marginTop: 10,
     textAlign: 'center',
-    color: '#6B7280',
-    fontSize: 14,
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '600',
   },
   sheetCancel: {
     backgroundColor: '#f0f0f0',
@@ -637,6 +667,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 25,
+  },
+  sliderTrack: {
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 999,
+    overflow: 'visible',
+  },
+  sliderFill: {
+    height: 8,
+    backgroundColor: '#4a90e2',
+    borderRadius: 999,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    top: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#4a90e2',
   },
 });
 

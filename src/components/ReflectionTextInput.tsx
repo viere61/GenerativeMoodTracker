@@ -15,6 +15,7 @@ interface ReflectionTextInputProps {
   maxLength?: number;
   onValidationChange?: (isValid: boolean) => void;
   showSubtitle?: boolean;
+  placeholderText?: string;
 }
 
 /**
@@ -30,6 +31,7 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
   maxLength = 1000,
   onValidationChange,
   showSubtitle = true,
+  placeholderText,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
@@ -56,7 +58,7 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
     };
   }, []);
 
-  // Compute weekly prompt and notify parent that input is valid (no min length)
+  // Compute weekly prompt (legacy default) and notify parent that input is valid (no min length)
   useEffect(() => {
     const day = new Date().getDay(); // 0 = Sunday, 1 = Monday, ... 6 = Saturday
     let prompt = '';
@@ -99,7 +101,7 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
 
   // Get placeholder text (no min length requirement)
   const getPlaceholder = () => {
-    return weeklyPrompt || "Start journaling your reflection here...";
+    return placeholderText || weeklyPrompt || "Start journaling your reflection here...";
   };
 
   return (
