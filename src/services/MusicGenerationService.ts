@@ -1917,6 +1917,10 @@ class MusicGenerationService {
           } else {
             this.isPlaying = false;
             this.currentMusicId = null;
+            try {
+              // Ensure position resets to 0 so UI shows 0:00 on next render
+              await this.soundObject?.setPositionAsync(0);
+            } catch {}
           }
         }
       });

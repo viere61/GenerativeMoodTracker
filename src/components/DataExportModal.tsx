@@ -6,11 +6,9 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
-  Alert,
-  Platform
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import DataExportService, { ExportFormat, ExportOptions } from '../services/DataExportService';
 
 interface DataExportModalProps {
@@ -20,14 +18,7 @@ interface DataExportModalProps {
 }
 
 const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, userId }) => {
-  // State for export options
-  const [format, setFormat] = useState<ExportFormat>(ExportFormat.JSON);
-  const [includeMusic, setIncludeMusic] = useState<boolean>(false);
-  const [useCustomDateRange, setUseCustomDateRange] = useState<boolean>(false);
-  const [startDate, setStartDate] = useState<Date>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // 30 days ago
-  const [endDate, setEndDate] = useState<Date>(new Date());
-  const [showStartDatePicker, setShowStartDatePicker] = useState<boolean>(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState<boolean>(false);
+  // Simplified export: always CSV with music included
   
   // State for export process
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -45,26 +36,6 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
     }
   }, [visible, userId]);
   
-  // Handle date change
-  const onStartDateChange = (event: any, selectedDate?: Date) => {
-    setShowStartDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setStartDate(selectedDate);
-    }
-  };
-  
-  const onEndDateChange = (event: any, selectedDate?: Date) => {
-    setShowEndDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setEndDate(selectedDate);
-    }
-  };
-  
-  // Format date for display
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString();
-  };
-  
   // Handle export
   const handleExport = async () => {
     try {
@@ -72,9 +43,8 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
       
       // Prepare export options
       const options: ExportOptions = {
-        format,
-        includeMusic,
-        ...(useCustomDateRange ? { startDate, endDate } : {})
+        format: ExportFormat.CSV,
+        includeMusic: true
       };
       
       // Export data
@@ -104,24 +74,7 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
     }
   };
   
-  // Render option button
-  const renderOptionButton = (
-    title: string,
-    selected: boolean,
-    onPress: () => void
-  ) => (
-    <TouchableOpacity
-      style={[styles.optionButton, selected && styles.selectedOption]}
-      onPress={onPress}
-    >
-      <Text style={[styles.optionText, selected && styles.selectedOptionText]}>
-        {title}
-      </Text>
-      {selected && (
-        <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.checkIcon} />
-      )}
-    </TouchableOpacity>
-  );
+  // Options UI removed
   
   return (
     <Modal
@@ -149,104 +102,9 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
           ) : (
             <>
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Format</Text>
-                <View style={styles.optionsRow}>
-                  {renderOptionButton(
-                    'JSON',
-                    format === ExportFormat.JSON,
-                    () => setFormat(ExportFormat.JSON)
-                  )}
-                  {renderOptionButton(
-                    'CSV',
-                    format === ExportFormat.CSV,
-                    () => setFormat(ExportFormat.CSV)
-                  )}
-                </View>
+                <Text style={styles.sectionTitle}>Export</Text>
+                <Text style={{ color: '#555', marginBottom: 8 }}>A CSV file including your music data will be generated.</Text>
               </View>
-              
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Include Music Data</Text>
-                <View style={styles.optionsRow}>
-                  {renderOptionButton(
-                    'Yes',
-                    includeMusic,
-                    () => setIncludeMusic(true)
-                  )}
-                  {renderOptionButton(
-                    'No',
-                    !includeMusic,
-                    () => setIncludeMusic(false)
-                  )}
-                </View>
-              </View>
-              
-              <View style={styles.section}>
-                <View style={styles.dateRangeHeader}>
-                  <Text style={styles.sectionTitle}>Date Range</Text>
-                  <TouchableOpacity
-                    style={styles.customRangeToggle}
-                    onPress={() => setUseCustomDateRange(!useCustomDateRange)}
-                  >
-                    <View style={[
-                      styles.checkbox,
-                      useCustomDateRange && styles.checkboxChecked
-                    ]}>
-                      {useCustomDateRange && (
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      )}
-                    </View>
-                    <Text style={styles.customRangeText}>Custom Range</Text>
-                  </TouchableOpacity>
-                </View>
-                
-                {useCustomDateRange && (
-                  <View style={styles.datePickerContainer}>
-                    <View style={styles.datePickerRow}>
-                      <Text style={styles.dateLabel}>Start:</Text>
-                      <TouchableOpacity
-                        style={styles.datePicker}
-                        onPress={() => setShowStartDatePicker(true)}
-                      >
-                        <Text style={styles.dateText}>{formatDate(startDate)}</Text>
-                        <Ionicons name="calendar-outline" size={20} color="#555" />
-                      </TouchableOpacity>
-                    </View>
-                    
-                    <View style={styles.datePickerRow}>
-                      <Text style={styles.dateLabel}>End:</Text>
-                      <TouchableOpacity
-                        style={styles.datePicker}
-                        onPress={() => setShowEndDatePicker(true)}
-                      >
-                        <Text style={styles.dateText}>{formatDate(endDate)}</Text>
-                        <Ionicons name="calendar-outline" size={20} color="#555" />
-                      </TouchableOpacity>
-                    </View>
-                    
-                    {showStartDatePicker && (
-                      <DateTimePicker
-                        value={startDate}
-                        mode="date"
-                        display="default"
-                        onChange={onStartDateChange}
-                        maximumDate={endDate}
-                      />
-                    )}
-                    
-                    {showEndDatePicker && (
-                      <DateTimePicker
-                        value={endDate}
-                        mode="date"
-                        display="default"
-                        onChange={onEndDateChange}
-                        minimumDate={startDate}
-                        maximumDate={new Date()}
-                      />
-                    )}
-                  </View>
-                )}
-              </View>
-              
               <TouchableOpacity
                 style={styles.exportButton}
                 onPress={handleExport}
@@ -257,7 +115,7 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
                 ) : (
                   <>
                     <Ionicons name="download-outline" size={20} color="#fff" style={styles.buttonIcon} />
-                    <Text style={styles.exportButtonText}>Export Data</Text>
+                    <Text style={styles.exportButtonText}>Export CSV with music</Text>
                   </>
                 )}
               </TouchableOpacity>

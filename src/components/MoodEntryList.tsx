@@ -43,17 +43,43 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
-  const [moodRangeFilter, setMoodRangeFilter] = useState<[number, number]>([1, 10]);
+  const [selectedMoodLabels, setSelectedMoodLabels] = useState<string[]>([]);
+  const [selectedInfluences, setSelectedInfluences] = useState<string[]>([]);
   
   // Determine the most recent entry (soft-locked)
   const mostRecentEntryId = entries.length > 0
     ? entries.reduce((latest, e) => (e.timestamp > latest.timestamp ? e : latest), entries[0]).entryId
     : null;
   
-  // Get unique emotions from all entries
-  const allEmotions = Array.from(
-    new Set(entries.flatMap(entry => entry.emotionTags))
-  ).sort();
+  // Build frequency maps and sorted lists
+  const emotionCounts: Record<string, number> = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    entries.forEach(entry => {
+      entry.emotionTags.forEach(tag => { counts[tag] = (counts[tag] || 0) + 1; });
+    });
+    return counts;
+  }, [entries]);
+
+  const allEmotions = React.useMemo(() => Object.keys(emotionCounts).sort((a,b) => (emotionCounts[b]||0)-(emotionCounts[a]||0)), [emotionCounts]);
+
+  const influenceCounts: Record<string, number> = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    entries.forEach(entry => {
+      (entry.influences || []).forEach(inf => { counts[inf] = (counts[inf] || 0) + 1; });
+    });
+    return counts;
+  }, [entries]);
+
+  const allInfluences = React.useMemo(() => Object.keys(influenceCounts).sort((a,b) => (influenceCounts[b]||0)-(influenceCounts[a]||0)), [influenceCounts]);
+
+  const moodCounts: Record<string, number> = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    entries.forEach(entry => {
+      const label = getMoodLabel(entry.moodRating);
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    return counts;
+  }, [entries]);
 
   // Apply sorting and filtering
   useEffect(() => {
@@ -66,11 +92,15 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
       );
     }
     
-    // Apply mood range filter
-    filtered = filtered.filter(entry => 
-      entry.moodRating >= moodRangeFilter[0] && 
-      entry.moodRating <= moodRangeFilter[1]
-    );
+    // Apply mood label filter
+    if (selectedMoodLabels.length > 0) {
+      filtered = filtered.filter(entry => selectedMoodLabels.includes(getMoodLabel(entry.moodRating)));
+    }
+
+    // Apply influence filter
+    if (selectedInfluences.length > 0) {
+      filtered = filtered.filter(entry => (entry.influences || []).some(inf => selectedInfluences.includes(inf)));
+    }
     
     // Apply sorting
     const sorted = filtered.sort((a, b) => {
@@ -82,7 +112,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
     });
     
     setSortedEntries(sorted);
-  }, [entries, sortOrder, selectedEmotions, moodRangeFilter]);
+  }, [entries, sortOrder, selectedEmotions, selectedMoodLabels, selectedInfluences]);
 
   // Toggle sort order
   const toggleSortOrder = () => {
@@ -101,11 +131,12 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
   // Reset all filters
   const resetFilters = () => {
     setSelectedEmotions([]);
-    setMoodRangeFilter([1, 10]);
+    setSelectedMoodLabels([]);
+    setSelectedInfluences([]);
   };
 
   // Map numeric mood rating to user-facing label (hide 1-10)
-  const getMoodLabel = (rating: number): string => {
+  function getMoodLabel(rating: number): string {
     if (rating >= 9) return 'Very Pleasant';
     if (rating >= 7) return 'Pleasant';
     if (rating === 6) return 'Slightly Pleasant';
@@ -113,7 +144,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
     if (rating === 4) return 'Slightly Unpleasant';
     if (rating >= 2) return 'Unpleasant';
     return 'Very Unpleasant';
-  };
+  }
 
   // Format timestamp to readable date
   const formatDate = (timestamp: number) => {
@@ -128,66 +159,16 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
     >
       <Text style={styles.entryDate}>{formatDate(item.timestamp)}</Text>
       <View style={styles.entryDetails}>
-        <View style={styles.ratingContainer}>
-          {/* Hide explicit 1-10 scale from users */}
-          <Text style={styles.entryRating}>Mood: {getMoodLabel(item.moodRating)}</Text>
-          <View 
-            style={[
-              styles.ratingIndicator, 
-              { backgroundColor: getMoodColor(item.moodRating) }
-            ]} 
-          />
+        {item.reflectionPrompt ? (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>Prompt Asked:</Text>
+            <Text style={styles.fieldText}>{item.reflectionPrompt}</Text>
+          </View>
+        ) : null}
+        <View style={styles.fieldBlock}>
+          <Text style={styles.fieldLabel}>Response:</Text>
+          <Text style={styles.fieldText} numberOfLines={3}>{item.reflection}</Text>
         </View>
-        <View style={styles.emotionContainer}>
-          {item.emotionTags.map((emotion, index) => (
-            <Text 
-              key={index} 
-              style={[
-                styles.emotionTag,
-                { backgroundColor: emotionColors[emotion] || emotionColors.default }
-              ]}
-            >
-              {emotion}
-            </Text>
-          ))}
-        </View>
-        {item.influences && item.influences.length > 0 && (
-          <View style={styles.influenceContainer}>
-            <Text style={styles.influenceLabel}>Influences:</Text>
-            {item.influences.map((influence, index) => (
-              <Text 
-                key={index} 
-                style={styles.influenceTag}
-              >
-                {influence}
-              </Text>
-            ))}
-          </View>
-        )}
-        {item.promptLabel && (
-          <View style={styles.influenceContainer}>
-            <Text style={styles.influenceLabel}>AI Sound Label:</Text>
-            <Text style={styles.influenceTag}>{item.promptLabel}</Text>
-          </View>
-        )}
-        <Text 
-          style={styles.entryReflection}
-          numberOfLines={2}
-        >
-          {item.reflection}
-        </Text>
-        {(item.musicGenerated || item.musicId) && item.entryId !== mostRecentEntryId && (
-          <View style={styles.musicIndicator}>
-            <TouchableOpacity 
-              style={styles.musicButton}
-              onPress={() => onEntryPress && onEntryPress(item)}
-              accessibilityLabel="Play generated music"
-              accessibilityHint="Opens the music player for this mood entry"
-            >
-              <Text style={styles.musicText}>♪ Play Audio</Text>
-            </TouchableOpacity>
-          </View>
-        )}
         {item.entryId === mostRecentEntryId && (
           <View style={styles.musicIndicator}>
             <Text style={styles.lockText}>🔒 AI sound available after your next log</Text>
@@ -215,7 +196,26 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Filter Entries</Text>
-          
+          {/* Mood first */}
+          <Text style={styles.filterSectionTitle}>Mood</Text>
+          <View style={styles.moodRangeContainer}>
+            <TouchableOpacity
+              style={[styles.moodRangeButton, selectedMoodLabels.length === 0 ? styles.moodRangeButtonSelected : null]}
+              onPress={() => setSelectedMoodLabels([])}
+            >
+              <Text style={selectedMoodLabels.length === 0 ? { color: 'white', fontWeight: '600' } : undefined}>All</Text>
+            </TouchableOpacity>
+            {['Very Pleasant','Pleasant','Slightly Pleasant','Neutral','Slightly Unpleasant','Unpleasant','Very Unpleasant'].map(label => (
+              <TouchableOpacity
+                key={label}
+                style={[styles.moodRangeButton, selectedMoodLabels.includes(label) ? styles.moodRangeButtonSelected : null]}
+                onPress={() => setSelectedMoodLabels(prev => prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label])}
+              >
+                <Text style={selectedMoodLabels.includes(label) ? { color: 'white', fontWeight: '600' } : undefined}>{label} ({moodCounts[label] || 0})</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <Text style={styles.filterSectionTitle}>Emotions</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.emotionFilterContainer}>
@@ -228,48 +228,33 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
                   ]}
                   onPress={() => toggleEmotion(emotion)}
                 >
-                  <Text style={selectedEmotions.includes(emotion) ? styles.emotionFilterTextSelected : styles.emotionFilterText}>
-                    {emotion}
-                  </Text>
+                  <Text style={selectedEmotions.includes(emotion) ? styles.emotionFilterTextSelected : styles.emotionFilterText}>{emotion} ({emotionCounts[emotion] || 0})</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </ScrollView>
-          
-          <Text style={styles.filterSectionTitle}>Mood Rating Range</Text>
-          <View style={styles.moodRangeContainer}>
-            <TouchableOpacity
-              style={[styles.moodRangeButton, moodRangeFilter[0] === 1 && moodRangeFilter[1] === 10 ? styles.moodRangeButtonSelected : null]}
-              onPress={() => setMoodRangeFilter([1, 10])}
-            >
-              <Text>All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.moodRangeButton, moodRangeFilter[0] === 1 && moodRangeFilter[1] === 3 ? styles.moodRangeButtonSelected : null]}
-              onPress={() => setMoodRangeFilter([1, 3])}
-            >
-              <Text>Low (1-3)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.moodRangeButton, moodRangeFilter[0] === 4 && moodRangeFilter[1] === 7 ? styles.moodRangeButtonSelected : null]}
-              onPress={() => setMoodRangeFilter([4, 7])}
-            >
-              <Text>Medium (4-7)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.moodRangeButton, moodRangeFilter[0] === 8 && moodRangeFilter[1] === 10 ? styles.moodRangeButtonSelected : null]}
-              onPress={() => setMoodRangeFilter([8, 10])}
-            >
-              <Text>High (8-10)</Text>
-            </TouchableOpacity>
-          </View>
+
+          <Text style={styles.filterSectionTitle}>Influences</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.emotionFilterContainer}>
+              {allInfluences.map((inf) => (
+                <TouchableOpacity
+                  key={inf}
+                  style={[styles.emotionFilterTag, selectedInfluences.includes(inf) && styles.emotionFilterTagSelected]}
+                  onPress={() => setSelectedInfluences(prev => prev.includes(inf) ? prev.filter(i => i !== inf) : [...prev, inf])}
+                >
+                  <Text style={selectedInfluences.includes(inf) ? styles.emotionFilterTextSelected : styles.emotionFilterText}>{inf} ({influenceCounts[inf] || 0})</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
           
           <View style={styles.modalButtonContainer}>
             <TouchableOpacity
               style={[styles.modalButton, styles.resetButton]}
               onPress={resetFilters}
             >
-              <Text style={styles.buttonText}>Reset</Text>
+              <Text style={[styles.buttonText, styles.resetButtonText]}>Reset</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalButton, styles.applyButton]}
@@ -352,27 +337,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#f8f8f8',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: 'transparent',
   },
   filterButton: {
     paddingVertical: 8,
     paddingHorizontal: 15,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#e6f2ff',
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
   },
   filterButtonText: {
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#1e3a8a',
   },
   sortButton: {
     paddingVertical: 8,
     paddingHorizontal: 15,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#e6f2ff',
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
   },
   sortButtonText: {
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#1e3a8a',
   },
   listContainer: {
     padding: 15,
@@ -446,6 +435,20 @@ const styles = StyleSheet.create({
   entryReflection: {
     fontSize: 14,
     color: '#555',
+  },
+  fieldBlock: {
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+    color: '#111',
+  },
+  fieldText: {
+    fontSize: 15,
+    color: '#222',
+    lineHeight: 20,
   },
   musicIndicator: {
     marginTop: 10,
@@ -564,6 +567,9 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     backgroundColor: '#f0f0f0',
+  },
+  resetButtonText: {
+    color: '#111',
   },
   applyButton: {
     backgroundColor: '#4a90e2',

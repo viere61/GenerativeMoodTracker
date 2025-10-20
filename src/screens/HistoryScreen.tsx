@@ -136,22 +136,12 @@ const HistoryScreen = ({ route }: any) => {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Mood Entry Details</Text>
             <Text style={styles.detailDate}>{formatDate(selectedEntry.timestamp)}</Text>
             
             <View style={styles.detailSection}>
               <Text style={styles.detailLabel}>Mood:</Text>
               <View style={styles.ratingContainer}>
                 <Text style={styles.detailText}>{getMoodLabel(selectedEntry.moodRating)}</Text>
-                <View 
-                  style={[
-                    styles.ratingIndicator, 
-                    { 
-                      backgroundColor: selectedEntry.moodRating >= 8 ? '#4CAF50' : 
-                                      selectedEntry.moodRating >= 5 ? '#FFC107' : '#F44336' 
-                    }
-                  ]} 
-                />
               </View>
             </View>
             
@@ -174,16 +164,16 @@ const HistoryScreen = ({ route }: any) => {
               </View>
             )}
             
-            <View style={styles.detailSection}>
-              <Text style={styles.detailLabel}>Reflection:</Text>
-              <Text style={styles.detailText}>{selectedEntry.reflection}</Text>
-            </View>
             {selectedEntry.reflectionPrompt && (
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Prompt Asked:</Text>
                 <Text style={styles.detailText}>{selectedEntry.reflectionPrompt}</Text>
               </View>
             )}
+            <View style={styles.detailSection}>
+              <Text style={styles.detailLabel}>Response:</Text>
+              <Text style={styles.detailText}>{selectedEntry.reflection}</Text>
+            </View>
             {(selectedEntry.promptLabel || selectedEntry.promptPrefix) && (
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>AI Sound Label:</Text>
@@ -452,44 +442,39 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: 'white',
     borderRadius: 20,
-    padding: 20,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
+  // Removed modalTitle usage to keep header compact
   detailDate: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 15,
+    marginBottom: 10,
   },
   detailSection: {
-    marginBottom: 15,
+    marginBottom: 10,
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   detailText: {
-    fontSize: 16,
+    fontSize: 15,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   ratingIndicator: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginLeft: 10,
+    // removed colored indicator from detail view
+    width: 0,
+    height: 0,
+    marginLeft: 0,
   },
   emotionContainer: {
     flexDirection: 'row',
@@ -513,7 +498,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 25,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 16,
   },
   closeButtonText: {
     color: 'white',
@@ -753,7 +738,7 @@ const WeeklySoundTab = ({ userId, weeklySelections, onSelectionMade }: { userId:
         <View style={{ padding: 10, marginBottom: 8, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
           <Text style={{ fontWeight: '500', marginBottom: 6 }}>Your Sound of the Week</Text>
           {entryReflectionsById[selectedSound.entryId] ? (
-            <Text style={{ marginBottom: 8, color: '#555' }}>Reflection: {entryReflectionsById[selectedSound.entryId]}</Text>
+            <Text style={{ marginBottom: 8, color: '#555' }}>Response: {entryReflectionsById[selectedSound.entryId]}</Text>
           ) : null}
           <MusicPlayer musicId={selectedSound.musicId} userId={userId} onError={() => {}} />
         </View>
@@ -768,7 +753,7 @@ const WeeklySoundTab = ({ userId, weeklySelections, onSelectionMade }: { userId:
             <View key={sound.musicId} style={{ padding: 10, marginBottom: 8, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
               <Text style={{ fontWeight: '500', marginBottom: 6 }}>Generated: {new Date(sound.generatedAt).toLocaleString()}</Text>
               {entryReflectionsById[sound.entryId] ? (
-                <Text style={{ marginBottom: 8, color: '#555' }}>Reflection: {entryReflectionsById[sound.entryId]}</Text>
+                <Text style={{ marginBottom: 8, color: '#555' }}>Response: {entryReflectionsById[sound.entryId]}</Text>
               ) : null}
               <MusicPlayer musicId={sound.musicId} userId={userId} onError={() => {}} />
               <TouchableOpacity style={{ backgroundColor: '#4a90e2', padding: 10, borderRadius: 6, marginTop: 6, alignItems: 'center' }} onPress={() => handleSelect(sound.musicId)}>

@@ -271,6 +271,18 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         return;
       }
       
+      // If playback has ended (looping off), reset UI to start so time shows 0:00
+      if (!playbackStatus.isPlaying && playbackStatus.currentMusicId === null) {
+        if (currentTime !== 0 || progress !== 0) {
+          setCurrentTime(0);
+          setProgress(0);
+        }
+        if (isPlaying) {
+          setIsPlaying(false);
+        }
+        return;
+      }
+
       // If this music is playing, update the progress
       if (playbackStatus.isPlaying && playbackStatus.currentMusicId === musicId) {
         console.log('This music is playing, updating progress...');

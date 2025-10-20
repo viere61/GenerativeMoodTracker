@@ -20,7 +20,6 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [showDevControls, setShowDevControls] = useState(false);
   // Time range UI moved to Settings
   const [timeWindowStatus, setTimeWindowStatus] = useState<{
     canLog: boolean;
@@ -172,7 +171,7 @@ const HomeScreen = () => {
     }
   };
 
-  // Reset time window for testing (would be in settings in real app)
+  // Reset time window for testing (moved out with Developer Controls)
   const handleResetTimeWindow = async () => {
     const userId = 'demo-user';
 
@@ -224,24 +223,7 @@ const HomeScreen = () => {
     }
   };
 
-  // Send a test notification
-  const handleTestNotification = async () => {
-    // Send a test notification
-    await pushNotificationService.sendTestNotification(
-      'Test Notification',
-      'This is a test notification to verify push notifications are working.'
-    );
-  };
-
-  // Send a test scheduled notification (for debugging)
-  const handleTestScheduledNotification = async () => {
-    const result = await pushNotificationService.sendTestScheduledNotification();
-    if (result.success) {
-      alert('Test scheduled notification created! It should appear in 2 minutes.');
-    } else {
-      alert('Failed to create test notification: ' + result.error);
-    }
-  };
+  // Developer test helpers removed from UI
 
   return (
     <ScrollView
@@ -299,34 +281,7 @@ const HomeScreen = () => {
         </View>
       )}
 
-      {/* Developer controls (collapsed by default) */}
-      <View style={styles.devControls}>
-        <TouchableOpacity onPress={() => setShowDevControls(!showDevControls)} style={styles.devToggle}>
-          <Text style={styles.devTitle}>Developer Controls {showDevControls ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-        {showDevControls && (
-          <View>
-            <View style={styles.buttonRow}>
-              <Button
-                title="Reset Time Window"
-                onPress={handleResetTimeWindow}
-              />
-            </View>
-            <View style={styles.buttonRow}>
-              <Button
-                title="Test Notification"
-                onPress={handleTestNotification}
-              />
-            </View>
-            <View style={styles.buttonRow}>
-              <Button
-                title="🧪 Test Scheduled Notification (2 min)"
-                onPress={handleTestScheduledNotification}
-              />
-            </View>
-          </View>
-        )}
-      </View>
+      {/* Developer controls removed */}
 
       {/* Music Generation Debug Panel removed to prevent automatic tests */}
       {/* <MusicDebugPanel userId="demo-user" /> */}
@@ -512,28 +467,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  devControls: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    alignItems: 'stretch',
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-  },
-  devTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  devToggle: {
-    alignSelf: 'center',
-  },
-  buttonRow: {
-    marginVertical: 5,
-    width: '100%',
-  },
+  // Developer control styles removed
   nextWindowInfo: {
     marginTop: 15,
     padding: 10,
