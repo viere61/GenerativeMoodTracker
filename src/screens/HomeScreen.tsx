@@ -42,9 +42,13 @@ const HomeScreen = () => {
       try {
         setLoading(true);
 
-        // Check notification permissions
-        const result = await pushNotificationService.initialize();
-        setNotificationsEnabled(result.success);
+        // Check notification permissions (permission-only, do not require push token)
+        const perm = await pushNotificationService.getPermissionsStatus();
+        // Expo returns both status string and granted boolean across SDKs
+        // Consider enabled if either indicates granted
+        // @ts-ignore - some SDKs expose 'granted'
+        const granted = (perm?.status === 'granted') || (perm as any)?.granted === true;
+        setNotificationsEnabled(!!granted);
 
         // Always use demo user for now
         const demoUserId = 'demo-user';
@@ -131,6 +135,15 @@ const HomeScreen = () => {
   // Check time window when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      // Re-check permission status on focus to keep banner in sync
+      (async () => {
+        try {
+          const perm = await pushNotificationService.getPermissionsStatus();
+          // @ts-ignore - some SDKs expose 'granted'
+          const granted = (perm?.status === 'granted') || (perm as any)?.granted === true;
+          setNotificationsEnabled(!!granted);
+        } catch {}
+      })();
       // Refresh preferences to reflect time format toggles made in Settings
       (async () => {
         const prefs = await UserPreferencesService.getPreferences('demo-user');
@@ -163,12 +176,13 @@ const HomeScreen = () => {
 
   // Request notification permissions
   const handleEnableNotifications = async () => {
-    const result = await pushNotificationService.initialize();
-    setNotificationsEnabled(result.success);
-
-    if (result.success) {
-      await checkTimeWindow();
-    }
+    await pushNotificationService.initialize();
+    // After requesting, re-check permission only to decide banner visibility
+    const perm = await pushNotificationService.getPermissionsStatus();
+    // @ts-ignore - some SDKs expose 'granted'
+    const granted = (perm?.status === 'granted') || (perm as any)?.granted === true;
+    setNotificationsEnabled(!!granted);
+    await checkTimeWindow();
   };
 
   // Reset time window for testing (moved out with Developer Controls)

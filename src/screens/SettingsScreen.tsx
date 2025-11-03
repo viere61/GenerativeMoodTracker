@@ -73,20 +73,25 @@ const SettingsScreen = () => {
         return;
       }
 
-      // Persist preference
+      // Persist preference immediately
       await updatePreference('preferredTimeRange', { start: newStartTime, end: newEndTime });
 
-      // Cancel ALL existing notifications
-      await pushNotificationService.cancelAllNotifications();
-
-      // Reset and regenerate windows, schedule notifications for 30 days
-      const user = 'demo-user';
-      await TimeWindowService.resetWindow(user);
-      const multiDayWindows = await TimeWindowService.createMultiDayWindows(user, 30);
-      await pushNotificationService.scheduleMultiDayNotifications(multiDayWindows);
-
+      // Close editor and notify user immediately (heavy work moves to background)
       setShowTimeRangeSelector(false);
-      Alert.alert('Updated', 'Your preferred time range has been saved.');
+      Alert.alert('Update', 'Time range saved');
+
+      // Run heavy work in the background without blocking UI
+      const user = 'demo-user';
+      setTimeout(async () => {
+        try {
+          // Single cancel-all occurs inside scheduleMultiDayNotifications
+          await TimeWindowService.resetWindow(user);
+          const multiDayWindows = await TimeWindowService.createMultiDayWindows(user, 30);
+          await pushNotificationService.scheduleMultiDayNotifications(multiDayWindows, 5);
+        } catch (bgErr) {
+          console.error('Background scheduling error after time range update:', bgErr);
+        }
+      }, 0);
     } catch (error) {
       console.error('Error updating time range:', error);
       Alert.alert('Error', 'Failed to update time range. Please try again.');

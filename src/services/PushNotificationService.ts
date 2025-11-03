@@ -433,7 +433,7 @@ export class PushNotificationService {
   /**
    * Schedule notifications for multiple windows
    */
-  async scheduleMultiDayNotifications(windows: any[]): Promise<{ 
+  async scheduleMultiDayNotifications(windows: any[], batchSize: number = 5): Promise<{ 
     success: boolean; 
     scheduledCount: number; 
     errors: string[] 
@@ -450,36 +450,42 @@ export class PushNotificationService {
     console.log('🗓️ [scheduleMultiDayNotifications] Cancelling ALL existing notifications first...');
     await this.cancelAllNotifications();
 
-    for (const window of windows) {
-      try {
-        const now = Date.now();
-        const windowStart = window.windowStart;
-        
-        // Only schedule if window is in the future (at least 1 minute away)
-        if (windowStart <= now + 60000) {
-          console.log('🗓️ [scheduleMultiDayNotifications] Skipping past/near window:', new Date(windowStart).toLocaleString());
-          continue;
+    const safeBatchSize = Math.max(1, Math.min(10, batchSize || 5));
+    for (let i = 0; i < windows.length; i += safeBatchSize) {
+      const batch = windows.slice(i, i + safeBatchSize);
+      const now = Date.now();
+      const tasks = batch.map(async (window) => {
+        try {
+          const windowStart = window.windowStart;
+          // Only schedule if window is in the future (at least 1 minute away)
+          if (windowStart <= now + 60000) {
+            console.log('🗓️ [scheduleMultiDayNotifications] Skipping past/near window:', new Date(windowStart).toLocaleString());
+            return { ok: false, msg: 'too soon' };
+          }
+          const result = await this.scheduleWindowNotificationWithoutCancel(
+            window.windowStart,
+            window.windowEnd,
+            "Time to Log Your Mood!",
+            `Your mood logging window is now open. You can log your mood until ${new Date(window.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+          );
+          if (result.success) {
+            console.log('🗓️ [scheduleMultiDayNotifications] ✅ Scheduled for:', new Date(windowStart).toLocaleString());
+            return { ok: true };
+          } else {
+            const msg = `Failed to schedule for ${new Date(windowStart).toLocaleString()}: ${result.error}`;
+            console.warn('🗓️ [scheduleMultiDayNotifications] ⚠️', msg);
+            return { ok: false, msg };
+          }
+        } catch (error) {
+          const msg = `Error scheduling for window: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error('🗓️ [scheduleMultiDayNotifications] ❌', msg);
+          return { ok: false, msg };
         }
-
-        // Schedule WITHOUT cancelling (we already cancelled all at the beginning)
-        const result = await this.scheduleWindowNotificationWithoutCancel(
-          window.windowStart,
-          window.windowEnd,
-          "Time to Log Your Mood!",
-          `Your mood logging window is now open. You can log your mood until ${new Date(window.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
-        );
-
-        if (result.success) {
-          results.scheduledCount++;
-          console.log('🗓️ [scheduleMultiDayNotifications] ✅ Scheduled for:', new Date(windowStart).toLocaleString());
-        } else {
-          results.errors.push(`Failed to schedule for ${new Date(windowStart).toLocaleString()}: ${result.error}`);
-        }
-      } catch (error) {
-        const errorMsg = `Error scheduling for window: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        results.errors.push(errorMsg);
-        console.error('🗓️ [scheduleMultiDayNotifications] ❌', errorMsg);
-      }
+      });
+      const resultsBatch = await Promise.all(tasks);
+      resultsBatch.forEach(r => {
+        if (r.ok) results.scheduledCount += 1; else if (r.msg) results.errors.push(r.msg);
+      });
     }
 
     if (results.errors.length > 0) {
