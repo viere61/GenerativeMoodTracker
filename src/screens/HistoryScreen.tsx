@@ -274,7 +274,7 @@ const HistoryScreen = ({ route }: any) => {
       >
         <View style={styles.sheetOverlay}>
           <View style={styles.sheetContainer}>
-            <Text style={styles.sheetTitle}>How well did this sound match your mood?</Text>
+            <Text style={styles.sheetTitle}>How well did this sound match your response?</Text>
             <Text style={styles.selectedCaption}>{getReactionLabel(Math.max(-2, Math.min(2, Math.round(sliderValue * 4) - 2)) as -2 | -1 | 0 | 1 | 2)}</Text>
             <View style={styles.reactionSliderWrap}>
               <ReactionSlider

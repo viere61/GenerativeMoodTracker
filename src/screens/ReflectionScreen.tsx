@@ -21,26 +21,26 @@ const ReflectionScreen: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const promptPool = [
-    'Share three words that capture your day.',
     'Share one object that encapsulates your feeling.',
     'What environment matches your current state of mind?',
     'If your mood were weather, what would it be?',
-    'What is the rhythm of your current mood?',
     'Describe your mood as a texture.',
-    'Describe your mood as a room in your dream house.',
-    'If your current mood were a piece of music, what would it sound like?',
-    'If your current mood were a dance move, how would it go?',
-    'What do you hope you remember from today?',
     'Share a food that encapsulates your feeling.',
-    'If your mood could speak, what would it say to you?',
-    'What word or phrase is echoing in your mind today?',
-    'What kind of architecture describes your current mood?',
     'What mode of transportation represents your current mood?',
     'If you were to be an animal today, what would it be?',
     'What ice cream flavors match your day today?',
     'Describe how you are feeling today based on a travel destination.',
-    'Describe the sound you want to hear right now.',
     'What color is your mood today?',
+    'What small moment stood out to you today?',
+    'Share three objects, sounds, or images from your day.',
+    'What greeting card message describes your day?',
+    'If your mood were a time of day, what would it be?',
+    'What plant or flower represents how you\'re feeling?',
+    'If your mood were a beverage, what would it be?',
+    'What sounds are you craving right now—rain, traffic, silence, music?',
+    'What natural element matches your feeling—fire, water, earth, air?',
+    'What kind of light describes your mood—bright sunlight, candlelight, moonlight, shadows?',
+    'What kind of container holds your mood today—a jar, a basket, an open box, a sealed envelope?',
   ];
   const [randomPrompt] = useState(() => promptPool[Math.floor(Math.random() * promptPool.length)]);
 
