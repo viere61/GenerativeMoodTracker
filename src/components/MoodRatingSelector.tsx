@@ -6,6 +6,11 @@ interface MoodRatingSelectorProps {
   onChange: (rating: number) => void;
   onValidationChange?: (isValid: boolean) => void;
   onSlidingChange?: (isSliding: boolean) => void;
+  title?: string; // optional title override
+  leftLabel?: string; // optional left-end label
+  rightLabel?: string; // optional right-end label
+  mode?: 'valence' | 'intensity'; // affects description text
+  showEmoji?: boolean; // whether to display emoji feedback
 }
 
 /**
@@ -18,6 +23,11 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   onChange,
   onValidationChange,
   onSlidingChange,
+  title = 'Mood Rating',
+  leftLabel,
+  rightLabel,
+  mode = 'valence',
+  showEmoji = true,
 }) => {
   // Animation value for the selection indicator
   const [scaleAnim] = useState(new Animated.Value(1));
@@ -34,15 +44,25 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   
   // Continuous slider scale mapped to 1-7 descriptive anchors
-  const anchors = [
-    'Very unpleasant',
-    'Unpleasant',
-    'Slightly unpleasant',
-    'Neutral',
-    'Slightly pleasant',
-    'Pleasant',
-    'Very pleasant'
-  ];
+  const anchors = mode === 'intensity'
+    ? [
+        'Very low intensity',
+        'Low',
+        'Slightly low',
+        'Moderate',
+        'Slightly high',
+        'High',
+        'Very high intensity',
+      ]
+    : [
+        'Very unpleasant',
+        'Unpleasant',
+        'Slightly unpleasant',
+        'Neutral',
+        'Slightly pleasant',
+        'Pleasant',
+        'Very pleasant',
+      ];
 
   // Check if screen reader is enabled
   useEffect(() => {
@@ -93,7 +113,7 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
 
   // Get description based on rating
   const getRatingDescription = (rating: number | null): string => {
-    if (rating === null) return 'Slide to rate your mood';
+    if (rating === null) return mode === 'intensity' ? 'Slide to set intensity' : 'Slide to rate your mood';
     // Map 1..100 to anchors
     const idx = Math.min(6, Math.max(0, Math.round(((rating - 1) / 99) * 6)));
     return anchors[idx];
@@ -101,8 +121,17 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
 
   // Get color based on rating
   const getRatingColor = (rating: number): string => {
-    // Gradient from red to green across 1..100
     const t = Math.max(0, Math.min(1, (rating - 1) / 99));
+    if (mode === 'intensity') {
+      // Low intensity → High intensity: light gray -> deep blue
+      const start = { r: 203, g: 213, b: 225 }; // slate-300
+      const end = { r: 30, g: 64, b: 175 }; // indigo-700
+      const r = Math.round(start.r + (end.r - start.r) * t);
+      const g = Math.round(start.g + (end.g - start.g) * t);
+      const b = Math.round(start.b + (end.b - start.b) * t);
+      return `rgb(${r},${g},${b})`;
+    }
+    // Valence: red -> green
     const r = Math.round(227 + (67 - 227) * t);
     const g = Math.round(57 + (160 - 57) * t);
     const b = Math.round(53 + (71 - 53) * t);
@@ -223,11 +252,11 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
     <View 
       style={styles.container}
       accessible={true}
-      accessibilityLabel="Mood rating selector"
-      accessibilityHint="Slide to rate your current mood"
+      accessibilityLabel={title}
+      accessibilityHint={mode === 'intensity' ? 'Slide to set intensity' : 'Slide to rate your current mood'}
       accessibilityRole="adjustable"
     >
-      <Text style={styles.title}>Mood Rating</Text>
+      <Text style={styles.title}>{title}</Text>
       
       <Animated.View style={[
         styles.descriptionContainer,
@@ -235,7 +264,7 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
       ]}>
         <Text style={styles.description}>
           {getRatingDescription(value)}
-          {value !== null && ` ${getRatingEmoji(value)}`}
+          {value !== null && showEmoji ? ` ${getRatingEmoji(value)}` : ''}
         </Text>
       </Animated.View>
       
@@ -252,8 +281,8 @@ const MoodRatingSelector: React.FC<MoodRatingSelectorProps> = ({
       </View>
       
       <View style={styles.scaleLabels}>
-        <Text style={styles.scaleLabel}>Very unpleasant</Text>
-        <Text style={styles.scaleLabel}>Very pleasant</Text>
+        <Text style={styles.scaleLabel}>{leftLabel ?? (mode === 'intensity' ? 'Low intensity' : 'Very unpleasant')}</Text>
+        <Text style={styles.scaleLabel}>{rightLabel ?? (mode === 'intensity' ? 'High intensity' : 'Very pleasant')}</Text>
       </View>
       
       {value === null && (

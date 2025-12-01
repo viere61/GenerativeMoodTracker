@@ -38,11 +38,13 @@ const MoodEntryScreen = () => {
   // Use demo user for web compatibility
   const user = { userId: 'demo-user' };
   
-  const [moodRating, setMoodRating] = useState<number | null>(null);
+  const [moodRating, setMoodRating] = useState<number | null>(null); // Valence
+  const [intensityRating, setIntensityRating] = useState<number | null>(null); // Arousal (Intensity)
   const [emotionTags, setEmotionTags] = useState<string[]>([]);
   const [influences, setInfluences] = useState<string[]>([]);
   const [reflection, setReflection] = useState('');
-  const [isRatingValid, setIsRatingValid] = useState(false);
+  const [isRatingValid, setIsRatingValid] = useState(false); // Valence valid
+  const [isIntensityValid, setIsIntensityValid] = useState(false);
   const [areTagsValid, setAreTagsValid] = useState(false);
   const [areInfluencesValid, setAreInfluencesValid] = useState(false);
   // Reflection no longer requires a minimum length; consider valid by default
@@ -79,13 +81,14 @@ const MoodEntryScreen = () => {
   }, [user]);
   
   // Check if form is valid
-  const isFormValid = isRatingValid && areTagsValid && areInfluencesValid && isReflectionValid;
-
+  const isFormValid = isRatingValid && isIntensityValid && areTagsValid && areInfluencesValid && isReflectionValid;
+  
   const handleNext = () => {
-    if (!user?.userId || !isRatingValid || !areTagsValid || !areInfluencesValid) return;
+    if (!user?.userId || !isRatingValid || !isIntensityValid || !areTagsValid || !areInfluencesValid) return;
     navigation.navigate('Reflection', {
       userId: user.userId,
       moodRating: moodRating as number,
+      intensityRating: intensityRating as number,
       emotionTags,
       influences,
     });
@@ -347,12 +350,30 @@ const MoodEntryScreen = () => {
             showsVerticalScrollIndicator
             scrollEnabled={!isSliding}
           >
-            <Text style={styles.title}>How you feel right now?</Text>
+            {/* Title removed per request */}
             <View style={styles.ratingContainer}>
-              <MoodRatingSelector 
-                value={moodRating} 
-                onChange={setMoodRating}
-                onValidationChange={setIsRatingValid}
+              <MoodRatingSelector
+                title="How are you feeling right now?"
+                leftLabel="Very unpleasant"
+                rightLabel="Very pleasant"
+                mode="valence"
+                showEmoji={true}
+                value={moodRating}
+                onChange={(v) => { setMoodRating(v); }}
+                onValidationChange={(ok) => setIsRatingValid(!!ok)}
+                onSlidingChange={setIsSliding}
+              />
+            </View>
+            <View style={styles.ratingContainer}>
+              <MoodRatingSelector
+                title="How intense is it?"
+                leftLabel="Low intensity"
+                rightLabel="High intensity"
+                mode="intensity"
+                showEmoji={false}
+                value={intensityRating}
+                onChange={(v) => { setIntensityRating(v); }}
+                onValidationChange={(ok) => setIsIntensityValid(!!ok)}
                 onSlidingChange={setIsSliding}
               />
             </View>
@@ -375,10 +396,10 @@ const MoodEntryScreen = () => {
               <TouchableOpacity
                 style={[
                   styles.submitButton,
-                  (!(isRatingValid && areTagsValid && areInfluencesValid) || isSubmitting) && styles.disabledButton
+                  (!(isRatingValid && isIntensityValid && areTagsValid && areInfluencesValid) || isSubmitting) && styles.disabledButton
                 ]}
                 onPress={handleNext}
-                disabled={!(isRatingValid && areTagsValid && areInfluencesValid) || isSubmitting}
+                disabled={!(isRatingValid && isIntensityValid && areTagsValid && areInfluencesValid) || isSubmitting}
                 accessibilityLabel="Next"
                 accessibilityHint="Go to reflection step"
               >
@@ -396,6 +417,9 @@ const MoodEntryScreen = () => {
                 </Text>
                 {!isRatingValid && (
                   <Text style={styles.validationMessage}>• Select a mood rating</Text>
+                )}
+                {!isIntensityValid && (
+                  <Text style={styles.validationMessage}>• Select an intensity rating</Text>
                 )}
                 {!areTagsValid && (
                   <Text style={styles.validationMessage}>• Select at least one emotion</Text>
@@ -416,12 +440,30 @@ const MoodEntryScreen = () => {
           showsVerticalScrollIndicator
           scrollEnabled={!isSliding}
         >
-          <Text style={styles.title}>How you feel right now?</Text>
+          {/* Title removed per request */}
           <View style={styles.ratingContainer}>
-            <MoodRatingSelector 
-              value={moodRating} 
-              onChange={setMoodRating}
-              onValidationChange={setIsRatingValid}
+            <MoodRatingSelector
+              title="How are you feeling right now?"
+              leftLabel="Very unpleasant"
+              rightLabel="Very pleasant"
+              mode="valence"
+              showEmoji={true}
+              value={moodRating}
+              onChange={(v) => { setMoodRating(v); }}
+              onValidationChange={(ok) => setIsRatingValid(!!ok)}
+              onSlidingChange={setIsSliding}
+            />
+          </View>
+          <View style={styles.ratingContainer}>
+            <MoodRatingSelector
+              title="How intense is it?"
+              leftLabel="Low intensity"
+              rightLabel="High intensity"
+              mode="intensity"
+              showEmoji={false}
+              value={intensityRating}
+              onChange={(v) => { setIntensityRating(v); }}
+              onValidationChange={(ok) => setIsIntensityValid(!!ok)}
               onSlidingChange={setIsSliding}
             />
           </View>
@@ -444,10 +486,10 @@ const MoodEntryScreen = () => {
             <TouchableOpacity
               style={[
                 styles.submitButton,
-                (!(isRatingValid && areTagsValid && areInfluencesValid) && styles.disabledButton)
+                (!(isRatingValid && isIntensityValid && areTagsValid && areInfluencesValid) && styles.disabledButton)
               ]}
               onPress={handleNext}
-              disabled={!(isRatingValid && areTagsValid && areInfluencesValid)}
+              disabled={!(isRatingValid && isIntensityValid && areTagsValid && areInfluencesValid)}
               accessibilityLabel="Next"
               accessibilityHint="Go to reflection step"
             >
@@ -461,6 +503,9 @@ const MoodEntryScreen = () => {
               </Text>
               {!isRatingValid && (
                 <Text style={styles.validationMessage}>• Select a mood rating</Text>
+              )}
+              {!isIntensityValid && (
+                <Text style={styles.validationMessage}>• Select an intensity rating</Text>
               )}
                               {!areTagsValid && (
                   <Text style={styles.validationMessage}>• Select at least one emotion</Text>

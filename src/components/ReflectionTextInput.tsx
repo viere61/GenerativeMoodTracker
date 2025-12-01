@@ -108,7 +108,7 @@ const ReflectionTextInput: React.FC<ReflectionTextInputProps> = ({
     <View style={styles.container}>
       <Text style={styles.title}>Reflection</Text>
       {showSubtitle && (
-        <Text style={styles.subtitle}>{weeklyPrompt}</Text>
+      <Text style={styles.subtitle}>{weeklyPrompt}</Text>
       )}
       
       <TextInput

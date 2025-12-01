@@ -168,7 +168,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>Response:</Text>
           <Text style={styles.fieldText} numberOfLines={3}>{item.reflection}</Text>
-        </View>
+          </View>
         {item.entryId === mostRecentEntryId && (
           <View style={styles.musicIndicator}>
             <Text style={styles.lockText}>🔒 AI sound available after your next log</Text>
@@ -215,7 +215,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
               </TouchableOpacity>
             ))}
           </View>
-
+          
           <Text style={styles.filterSectionTitle}>Emotions</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.emotionFilterContainer}>
@@ -233,20 +233,20 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
               ))}
             </View>
           </ScrollView>
-
+          
           <Text style={styles.filterSectionTitle}>Influences</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.emotionFilterContainer}>
               {allInfluences.map((inf) => (
-                <TouchableOpacity
+            <TouchableOpacity
                   key={inf}
                   style={[styles.emotionFilterTag, selectedInfluences.includes(inf) && styles.emotionFilterTagSelected]}
                   onPress={() => setSelectedInfluences(prev => prev.includes(inf) ? prev.filter(i => i !== inf) : [...prev, inf])}
-                >
+            >
                   <Text style={selectedInfluences.includes(inf) ? styles.emotionFilterTextSelected : styles.emotionFilterText}>{inf} ({influenceCounts[inf] || 0})</Text>
-                </TouchableOpacity>
+            </TouchableOpacity>
               ))}
-            </View>
+          </View>
           </ScrollView>
           
           <View style={styles.modalButtonContainer}>

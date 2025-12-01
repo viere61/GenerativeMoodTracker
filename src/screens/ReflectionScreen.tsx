@@ -7,6 +7,7 @@ import MoodEntryService from '../services/MoodEntryService';
 type ReflectionParams = {
   userId: string;
   moodRating: number;
+  intensityRating: number;
   emotionTags: string[];
   influences: string[];
 };
@@ -15,7 +16,7 @@ type ReflectionRouteProp = RouteProp<{ Reflection: ReflectionParams }, 'Reflecti
 const ReflectionScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<ReflectionRouteProp>();
-  const { userId, moodRating, emotionTags, influences } = route.params;
+  const { userId, moodRating, intensityRating, emotionTags, influences } = route.params;
 
   const [reflection, setReflection] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,6 +52,7 @@ const ReflectionScreen: React.FC = () => {
       await MoodEntryService.saveMoodEntry(
         userId,
         moodRating,
+        intensityRating,
         emotionTags,
         influences,
         reflection,

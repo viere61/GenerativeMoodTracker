@@ -23,6 +23,7 @@ class MoodEntryService {
   async saveMoodEntry(
     userId: string,
     moodRating: number,
+    intensityRating: number | undefined = undefined,
     emotionTags: string[] = [],
     influences: string[] = [],
     reflection: string = '',
@@ -51,6 +52,18 @@ class MoodEntryService {
     } else if (moodRating < 1) {
       normalizedRating = 1;
     }
+    // Normalize intensity if provided with same logic
+    let normalizedIntensity = intensityRating;
+    if (typeof normalizedIntensity === 'number') {
+      if (normalizedIntensity > 10) {
+        const capped = Math.min(Math.max(normalizedIntensity, 1), 100);
+        const t = (capped - 1) / 99;
+        const mapped = 1 + t * 9;
+        normalizedIntensity = Math.max(1, Math.min(10, Math.round(mapped)));
+      } else if (normalizedIntensity < 1) {
+        normalizedIntensity = 1;
+      }
+    }
     
     // Create new mood entry
     const newEntry: MoodEntry = {
@@ -58,6 +71,7 @@ class MoodEntryService {
       userId,
       timestamp: Date.now(),
       moodRating: normalizedRating,
+      intensityRating: normalizedIntensity,
       emotionTags,
       influences,
       reflection,

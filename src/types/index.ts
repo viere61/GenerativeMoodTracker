@@ -50,6 +50,7 @@ export interface MoodEntry {
   userId: string;
   timestamp: number; // Timestamp
   moodRating: number; // 1-10
+  intensityRating?: number; // 1-10 arousal (low to high)
   emotionTags: string[];
   influences: string[]; // What influenced your mood
   reflection: string;

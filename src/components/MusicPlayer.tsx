@@ -87,7 +87,7 @@ const SliderComponent = ({
       <View
         style={{
           position: 'absolute',
-          left: `${value * 100}%`,
+            left: `${value * 100}%`,
           // Avoid initial visual jump: only center the thumb when it is far enough from the left edge
           marginLeft: containerWidth > 0 && (value * containerWidth) <= 10 ? 0 : -10,
           width: 20,
@@ -153,7 +153,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
   useEffect(() => {
     const progressInterval = setInterval(() => {
       // Update progress at a higher cadence for smoother UI
-      updateProgress();
+        updateProgress();
     }, 100);
     
     // Clean up interval on unmount or when isPlaying changes
@@ -282,7 +282,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         }
         return;
       }
-
+      
       // If this music is playing, update the progress
       if (playbackStatus.isPlaying && playbackStatus.currentMusicId === musicId) {
         console.log('This music is playing, updating progress...');
@@ -388,8 +388,8 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
           setIsPlaying(true);
           // Only reset position when starting a fresh playback, not when resuming
           if (!resumed) {
-            setCurrentTime(0);
-            setProgress(0);
+          setCurrentTime(0);
+          setProgress(0);
           }
           console.log('Music playback started successfully');
         } else {
