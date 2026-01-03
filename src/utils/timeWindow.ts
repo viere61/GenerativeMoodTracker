@@ -3,9 +3,10 @@
  */
 
 /**
- * Generates a random 1-hour logging window within the user's preferred time range
+ * Generates a random 2-hour logging window within the user's preferred time range
+ * If the preference is exactly 2 hours, uses the exact time range
  * @param preferredStart Start time in "HH:MM" format (e.g., "09:00")
- * @param preferredEnd End time in "HH:MM" format (e.g., "21:00")
+ * @param preferredEnd End time in "HH:MM" format (e.g., "11:00")
  * @returns Object containing window start and end timestamps, and the date
  */
 export const generateRandomWindow = (preferredStart: string, preferredEnd: string) => {
@@ -16,12 +17,50 @@ export const generateRandomWindow = (preferredStart: string, preferredEnd: strin
   // Convert to minutes for easier calculation
   const startMinutes = startHour * 60 + startMinute;
   const endMinutes = endHour * 60 + endMinute;
+  const rangeMinutes = endMinutes - startMinutes;
   
-  // Calculate available range (subtract 60 minutes for the 1-hour window)
-  const availableRange = endMinutes - startMinutes - 60;
+  // If preference is exactly 2 hours, use exact match
+  if (rangeMinutes === 120) {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    
+    // If the window time has already passed today, use tomorrow
+    const useToday = startMinutes > currentTotalMinutes;
+    
+    const windowDate = new Date();
+    if (!useToday) {
+      windowDate.setDate(windowDate.getDate() + 1);
+    }
+    windowDate.setHours(startHour, startMinute, 0, 0);
+    
+    const windowEndDate = new Date(windowDate);
+    windowEndDate.setHours(endHour, endMinute, 0, 0);
+    
+    const dateString = windowDate.toISOString().split('T')[0];
+    
+    console.log('Generated exact 2-hour window:', {
+      preferredRange: `${preferredStart} - ${preferredEnd}`,
+      currentTime: now.toLocaleTimeString(),
+      windowStart: windowDate.toLocaleString(),
+      windowEnd: windowEndDate.toLocaleString(),
+      useToday,
+      dateString
+    });
+    
+    return {
+      windowStart: windowDate.getTime(),
+      windowEnd: windowEndDate.getTime(),
+      date: dateString
+    };
+  }
+  
+  // Calculate available range (subtract 120 minutes for the 2-hour window)
+  const availableRange = rangeMinutes - 120;
   
   if (availableRange <= 0) {
-    throw new Error('Time range too small for 1-hour window');
+    throw new Error('Time range too small for 2-hour window');
   }
   
   // Generate random offset within available range
@@ -48,9 +87,9 @@ export const generateRandomWindow = (preferredStart: string, preferredEnd: strin
   }
   windowDate.setHours(windowStartHour, windowStartMinute, 0, 0);
   
-  // Create window end date (1 hour later)
+  // Create window end date (2 hours later)
   const windowEndDate = new Date(windowDate);
-  windowEndDate.setHours(windowEndDate.getHours() + 1);
+  windowEndDate.setHours(windowEndDate.getHours() + 2);
   
   const dateString = windowDate.toISOString().split('T')[0]; // YYYY-MM-DD format
   
@@ -71,9 +110,10 @@ export const generateRandomWindow = (preferredStart: string, preferredEnd: strin
 };
 
 /**
- * Generates a random 1-hour logging window for a specific date
+ * Generates a random 2-hour logging window for a specific date
+ * If the preference is exactly 2 hours, uses the exact time range
  * @param preferredStart Start time in "HH:MM" format (e.g., "09:00")
- * @param preferredEnd End time in "HH:MM" format (e.g., "21:00")
+ * @param preferredEnd End time in "HH:MM" format (e.g., "11:00")
  * @param targetDate The specific date to generate the window for
  * @returns Object containing window start and end timestamps, and the date
  */
@@ -85,12 +125,38 @@ export const generateRandomWindowForDate = (preferredStart: string, preferredEnd
   // Convert to minutes for easier calculation
   const startMinutes = startHour * 60 + startMinute;
   const endMinutes = endHour * 60 + endMinute;
+  const rangeMinutes = endMinutes - startMinutes;
   
-  // Calculate available range (subtract 60 minutes for the 1-hour window)
-  const availableRange = endMinutes - startMinutes - 60;
+  // If preference is exactly 2 hours, use exact match
+  if (rangeMinutes === 120) {
+    const windowDate = new Date(targetDate);
+    windowDate.setHours(startHour, startMinute, 0, 0);
+    
+    const windowEndDate = new Date(targetDate);
+    windowEndDate.setHours(endHour, endMinute, 0, 0);
+    
+    const dateString = windowDate.toISOString().split('T')[0];
+    
+    console.log('Generated exact 2-hour window for date:', {
+      targetDate: targetDate.toDateString(),
+      preferredRange: `${preferredStart} - ${preferredEnd}`,
+      windowStart: windowDate.toLocaleString(),
+      windowEnd: windowEndDate.toLocaleString(),
+      dateString
+    });
+    
+    return {
+      windowStart: windowDate.getTime(),
+      windowEnd: windowEndDate.getTime(),
+      date: dateString
+    };
+  }
+  
+  // Calculate available range (subtract 120 minutes for the 2-hour window)
+  const availableRange = rangeMinutes - 120;
   
   if (availableRange <= 0) {
-    throw new Error('Time range too small for 1-hour window');
+    throw new Error('Time range too small for 2-hour window');
   }
   
   // Generate random offset within available range
@@ -105,9 +171,9 @@ export const generateRandomWindowForDate = (preferredStart: string, preferredEnd
   const windowDate = new Date(targetDate);
   windowDate.setHours(windowStartHour, windowStartMinute, 0, 0);
   
-  // Create window end date (1 hour later)
+  // Create window end date (2 hours later)
   const windowEndDate = new Date(windowDate);
-  windowEndDate.setHours(windowEndDate.getHours() + 1);
+  windowEndDate.setHours(windowEndDate.getHours() + 2);
   
   const dateString = windowDate.toISOString().split('T')[0]; // YYYY-MM-DD format
   
@@ -180,6 +246,6 @@ export const validateTimeRange = (start: string, end: string): boolean => {
   const startMinutes = startHour * 60 + startMinute;
   const endMinutes = endHour * 60 + endMinute;
   
-  // Must have at least 1 hour difference
-  return endMinutes - startMinutes >= 60;
+  // Must have at least 2 hours difference
+  return endMinutes - startMinutes >= 120;
 };

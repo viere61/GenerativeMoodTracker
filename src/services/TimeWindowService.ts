@@ -2,6 +2,7 @@ import { DailyWindow } from '../types';
 import UserPreferencesService from './UserPreferencesService';
 import { generateRandomWindow, generateRandomWindowForDate, isWithinWindow, formatTime, getTimeUntil } from '../utils/timeWindow';
 import StorageService from './StorageService';
+import MoodEntryService from './MoodEntryService';
 
 const DAILY_WINDOW_KEY = 'daily_window';
 
@@ -64,13 +65,17 @@ class TimeWindowService {
       // Generate random window
       const { windowStart, windowEnd, date } = generateRandomWindow(start, end);
       
+      // Check if this is today's window and if user has already logged
+      const today = new Date().toISOString().split('T')[0];
+      const hasLogged = date === today && await MoodEntryService.hasLoggedMoodToday(userId);
+      
       // Create daily window object
       const dailyWindow: DailyWindow = {
         userId,
         date,
         windowStart,
         windowEnd,
-        hasLogged: false,
+        hasLogged,
         notificationSent: false
       };
       
@@ -180,12 +185,22 @@ class TimeWindowService {
       const prefs = await UserPreferencesService.getPreferences(userId);
       const hour12 = (prefs?.timeFormat ?? '12h') === '12h';
       
-      // Check if already logged today
-      if (window.hasLogged) {
+      // Check if already logged today - verify against MoodEntryService for accuracy
+      // This ensures accuracy even if windows are regenerated after preferences change
+      const today = new Date().toISOString().split('T')[0];
+      const hasLoggedToday = window.date === today && await MoodEntryService.hasLoggedMoodToday(userId);
+      
+      // Update window's hasLogged flag if it's out of sync
+      if (hasLoggedToday && !window.hasLogged) {
+        window.hasLogged = true;
+        await this.saveDailyWindow(window);
+      }
+      
+      if (window.hasLogged || hasLoggedToday) {
         return {
           canLog: false,
           message: 'You have already logged your mood today.',
-          window
+          window: { ...window, hasLogged: true }
         };
       }
       
@@ -376,13 +391,20 @@ class TimeWindowService {
                  // Generate random window for this specific date
          const { windowStart, windowEnd } = generateRandomWindowForDate(start, end, targetDate);
         
+        // Check if user has logged today (for today's window only)
+        let hasLogged = false;
+        if (i === 0) {
+          // Today's window - check if user has already logged
+          hasLogged = await MoodEntryService.hasLoggedMoodToday(userId);
+        }
+        
         // Create daily window object
         const dailyWindow: DailyWindow = {
           userId,
           date: dateString,
           windowStart,
           windowEnd,
-          hasLogged: false,
+          hasLogged,
           notificationSent: false
         };
 
@@ -512,8 +534,15 @@ class TimeWindowService {
     const startTotalMinutes = startHour * 60 + startMinute;
     const endTotalMinutes = endHour * 60 + endMinute;
     
-    // Window should start within the preferred range (with some tolerance for the 1-hour window)
-    return windowTotalMinutes >= startTotalMinutes && windowTotalMinutes <= (endTotalMinutes - 60);
+    // Window should start within the preferred range (with some tolerance for the 2-hour window)
+    // If preference is exactly 2 hours, window should match exactly
+    const rangeMinutes = endTotalMinutes - startTotalMinutes;
+    if (rangeMinutes === 120) {
+      // Exact match: window start must equal preferred start
+      return windowTotalMinutes === startTotalMinutes;
+    }
+    // For larger ranges, window should start within range (accounting for 2-hour window)
+    return windowTotalMinutes >= startTotalMinutes && windowTotalMinutes <= (endTotalMinutes - 120);
   }
 
   /**

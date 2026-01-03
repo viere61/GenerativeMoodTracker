@@ -69,7 +69,7 @@ const SettingsScreen = () => {
       }
 
       if (endMinutes - startMinutes < 120) {
-        Alert.alert('Invalid Time Range', 'Time range must be at least 2 hours (e.g., 13:00 - 15:00).');
+        Alert.alert('Invalid Time Range', 'Time range must be at least 2 hours (e.g., 09:00 - 11:00).');
         return;
       }
 
