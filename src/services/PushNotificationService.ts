@@ -195,9 +195,9 @@ export class PushNotificationService {
       console.log('🔔 [scheduleWindowNotification] Cancelling ALL existing notifications...');
       await this.cancelAllNotifications();
 
-      // Create the notification body
+      // Create the notification body (always use 12-hour format for notifications)
       const notificationBody = body || 
-        `Your mood logging window is now open. You can log your mood until ${windowEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+        `Your mood logging window is now open. You can log your mood until ${windowEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}.`;
 
       console.log('🔔 [scheduleWindowNotification] Scheduling notification with Expo...');
       console.log('🔔 [scheduleWindowNotification] Title:', title);
@@ -349,7 +349,7 @@ export class PushNotificationService {
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: "🧪 Test Scheduled Notification",
-          body: `This should appear at ${testTime.toLocaleTimeString()}`,
+          body: `This should appear at ${testTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}`,
           data: { 
             type: 'test_scheduled',
             scheduledFor: testTime.getTime()
@@ -466,7 +466,7 @@ export class PushNotificationService {
             window.windowStart,
             window.windowEnd,
             "Time to Log Your Mood!",
-            `Your mood logging window is now open. You can log your mood until ${new Date(window.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+            `Your mood logging window is now open. You can log your mood until ${new Date(window.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}.`
           );
           if (result.success) {
             console.log('🗓️ [scheduleMultiDayNotifications] ✅ Scheduled for:', new Date(windowStart).toLocaleString());
@@ -524,9 +524,9 @@ export class PushNotificationService {
         return { success: false, error: 'Window start time is not far enough in the future' };
       }
 
-      // Create the notification body
+      // Create the notification body (always use 12-hour format for notifications)
       const notificationBody = body || 
-        `Your mood logging window is now open. You can log your mood until ${windowEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+        `Your mood logging window is now open. You can log your mood until ${windowEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}.`;
 
       // Schedule the notification (WITHOUT cancelling existing ones)
       const notificationId = await Notifications.scheduleNotificationAsync({
@@ -584,7 +584,7 @@ export class PushNotificationService {
             tomorrowWindow.windowStart,
             tomorrowWindow.windowEnd,
             "Time to Log Your Mood!",
-            `Your mood logging window is now open. You can log your mood until ${new Date(tomorrowWindow.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+            `Your mood logging window is now open. You can log your mood until ${new Date(tomorrowWindow.windowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}.`
           );
           
           if (result.success) {
