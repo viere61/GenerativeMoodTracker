@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+*.app
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Source design files (keep only compiled assets - PNGs are already created)
+# *.jpg
+# *.jpeg
+# *.psd
+# *.ai
+
+# Test files
+**/__tests__/
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.test.jsx
+e2e/
+
+# Documentation
+*.md
+!README.md
+
+# Environment files
+.env*.local
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Git
+.git/
+.gitignore
+
+# Other
+*.log
+*.tmp
+*.temp
+
