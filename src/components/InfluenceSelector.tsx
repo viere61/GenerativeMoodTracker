@@ -6,6 +6,8 @@ interface InfluenceSelectorProps {
   selectedInfluences: string[];
   onInfluencesChange: (influences: string[]) => void;
   onValidationChange?: (isValid: boolean) => void;
+  onBeginNestedScroll?: () => void;
+  onEndNestedScroll?: () => void;
 }
 
 /**
@@ -16,6 +18,8 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
   selectedInfluences,
   onInfluencesChange,
   onValidationChange,
+  onBeginNestedScroll,
+  onEndNestedScroll,
 }) => {
   // Predefined influence categories
   const defaultInfluences = [
@@ -124,6 +128,28 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
         scrollEnabled={true}
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets
+        // Android nested-scroll fix: keep the parent ScrollView from taking over mid-gesture
+        onTouchStart={() => {
+          if (Platform.OS === 'android') onBeginNestedScroll?.();
+        }}
+        onTouchEnd={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
+        onTouchCancel={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
+        onScrollBeginDrag={() => {
+          if (Platform.OS === 'android') onBeginNestedScroll?.();
+        }}
+        onScrollEndDrag={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
+        onMomentumScrollBegin={() => {
+          if (Platform.OS === 'android') onBeginNestedScroll?.();
+        }}
+        onMomentumScrollEnd={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
       >
         <View style={styles.addRow}>
           <TextInput

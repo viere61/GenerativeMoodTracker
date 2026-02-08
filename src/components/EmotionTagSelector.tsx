@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   ScrollView,
   AccessibilityInfo,
-  TextInput
+  TextInput,
+  Platform
 } from 'react-native';
 import UserPreferencesService from '../services/UserPreferencesService';
 
@@ -16,6 +17,8 @@ interface EmotionTagSelectorProps {
   availableTags?: string[];
   onValidationChange?: (isValid: boolean) => void;
   minSelections?: number;
+  onBeginNestedScroll?: () => void;
+  onEndNestedScroll?: () => void;
 }
 
 /**
@@ -32,7 +35,9 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
     'Frustrated', 'Overwhelmed', 'Hopeful', 'Motivated', 'Proud', 'Confident'
   ],
   onValidationChange,
-  minSelections = 1
+  minSelections = 1,
+  onBeginNestedScroll,
+  onEndNestedScroll,
 }) => {
   // Track if screen reader is enabled for enhanced accessibility
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
@@ -150,6 +155,28 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
         contentContainerStyle={styles.tagsContainer}
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
+        // Android nested-scroll fix: keep the parent ScrollView from taking over mid-gesture
+        onTouchStart={() => {
+          if (Platform.OS === 'android') onBeginNestedScroll?.();
+        }}
+        onTouchEnd={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
+        onTouchCancel={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
+        onScrollBeginDrag={() => {
+          if (Platform.OS === 'android') onBeginNestedScroll?.();
+        }}
+        onScrollEndDrag={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
+        onMomentumScrollBegin={() => {
+          if (Platform.OS === 'android') onBeginNestedScroll?.();
+        }}
+        onMomentumScrollEnd={() => {
+          if (Platform.OS === 'android') onEndNestedScroll?.();
+        }}
       >
         {/* Add custom emotion tag */}
         <View style={styles.addRow}>

@@ -53,6 +53,7 @@ const MoodEntryScreen = () => {
   const [hasAlreadyLoggedToday, setHasAlreadyLoggedToday] = useState(false);
   const [useSimpleComponents, setUseSimpleComponents] = useState(false);
   const [isSliding, setIsSliding] = React.useState(false);
+  const [isNestedListInteracting, setIsNestedListInteracting] = React.useState(false);
   
   // Check if user has already logged a mood today
   useEffect(() => {
@@ -104,6 +105,7 @@ const MoodEntryScreen = () => {
       await MoodEntryService.saveMoodEntry(
         user.userId,
         moodRating,
+        intensityRating ?? undefined,
         emotionTags,
         influences,
         reflection
@@ -348,7 +350,8 @@ const MoodEntryScreen = () => {
             contentContainerStyle={{ flexGrow: 1, padding: 20 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator
-            scrollEnabled={!isSliding}
+            nestedScrollEnabled={Platform.OS === 'android'}
+            scrollEnabled={!isSliding && !(Platform.OS === 'android' && isNestedListInteracting)}
           >
             {/* Title removed per request */}
             <View style={styles.ratingContainer}>
@@ -383,6 +386,12 @@ const MoodEntryScreen = () => {
                 onChange={setEmotionTags}
                 onValidationChange={setAreTagsValid}
                 minSelections={1}
+                onBeginNestedScroll={() => {
+                  if (Platform.OS === 'android') setIsNestedListInteracting(true);
+                }}
+                onEndNestedScroll={() => {
+                  if (Platform.OS === 'android') setIsNestedListInteracting(false);
+                }}
               />
             </View>
             <View style={styles.influencesContainer}>
@@ -390,6 +399,12 @@ const MoodEntryScreen = () => {
                 selectedInfluences={influences}
                 onInfluencesChange={setInfluences}
                 onValidationChange={setAreInfluencesValid}
+                onBeginNestedScroll={() => {
+                  if (Platform.OS === 'android') setIsNestedListInteracting(true);
+                }}
+                onEndNestedScroll={() => {
+                  if (Platform.OS === 'android') setIsNestedListInteracting(false);
+                }}
               />
             </View>
             <View style={styles.submitContainer}>
