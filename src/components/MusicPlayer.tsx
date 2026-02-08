@@ -8,7 +8,6 @@ import {
   Animated,
   Easing,
   Alert,
-  Share,
 } from 'react-native';
 // Using a custom Slider component since @react-native-community/slider is not installed
 // In a real app, we would install @react-native-community/slider for better performance and features
@@ -104,6 +103,7 @@ import MusicGenerationService from '../services/MusicGenerationService';
 import MoodEntryService from '../services/MoodEntryService';
 import { GeneratedMusic } from '../types';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 interface MusicPlayerProps {
   musicId: string;
@@ -483,19 +483,26 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ musicId, userId, onError }) =
         to: destinationUri
       });
       
+      // Check if sharing is available
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      if (!isSharingAvailable) {
+        Alert.alert(
+          'Download Complete',
+          `Music saved to your downloads folder as "${fileName}"`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // Share the file using expo-sharing (works properly on Android)
+      await Sharing.shareAsync(destinationUri);
+      
       // Show success message
       Alert.alert(
         'Download Complete',
-        `Music saved to your downloads folder as "${fileName}"`,
+        `Music saved and ready to share as "${fileName}"`,
         [{ text: 'OK' }]
       );
-      
-      // Share the file
-      await Share.share({
-        title: 'Share your mood music',
-        message: 'Check out this music generated from my mood!',
-        url: destinationUri
-      });
       
     } catch (error) {
       console.error('Error downloading music:', error);

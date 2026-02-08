@@ -291,7 +291,7 @@ const MoodEntryList: React.FC<MoodEntryListProps> = ({
           onPress={toggleSortOrder}
         >
           <Text style={styles.sortButtonText}>
-            Sort: {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+            Sort: {sortOrder === 'desc' ? 'Latest First' : 'Earliest First'}
           </Text>
         </TouchableOpacity>
       </View>

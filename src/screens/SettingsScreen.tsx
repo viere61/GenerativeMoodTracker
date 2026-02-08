@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Switch, Button, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Switch, Button, Alert, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import DataExportModal from '../components/DataExportModal';
 import useUserPreferences from '../hooks/useUserPreferences';
 import TimeWindowService from '../services/TimeWindowService';
@@ -25,6 +26,8 @@ const SettingsScreen = () => {
   const [showTimeRangeSelector, setShowTimeRangeSelector] = useState(false);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('21:00');
+  const [startTimePickerVisible, setStartTimePickerVisible] = useState(false);
+  const [endTimePickerVisible, setEndTimePickerVisible] = useState(false);
   const hour12 = (preferences?.timeFormat ?? '12h') === '12h';
 
   const pushNotificationService = PushNotificationService.getInstance();
@@ -48,6 +51,57 @@ const SettingsScreen = () => {
     const hour12val = hour % 12 === 0 ? 12 : hour % 12;
     const minuteStr = mStr.padStart(2, '0');
     return `${hour12val}:${minuteStr} ${period}`;
+  };
+
+  type TimePickerItem =
+    | { kind: 'header'; label: string }
+    | { kind: 'time'; value: string; label: string };
+
+  const buildTimePickerItems = (use12h: boolean): TimePickerItem[] => {
+    const times = Array.from({ length: 24 }, (_, i) => {
+      const hour = i.toString().padStart(2, '0');
+      const time = `${hour}:00`;
+      return { value: time, label: formatTime(time, use12h) };
+    });
+
+    if (!use12h) return times.map((t) => ({ kind: 'time', ...t }));
+
+    const am = times.slice(0, 12).map((t) => ({ kind: 'time' as const, ...t }));
+    const pm = times.slice(12).map((t) => ({ kind: 'time' as const, ...t }));
+    return [{ kind: 'header', label: 'AM' }, ...am, { kind: 'header', label: 'PM' }, ...pm];
+  };
+
+  const timePickerItems = buildTimePickerItems(hour12);
+
+  const renderTimePickerItem = (
+    item: TimePickerItem,
+    selected: string,
+    onSelect: (time: string) => void,
+    close: () => void
+  ) => {
+    if (item.kind === 'header') {
+      return (
+        <View style={styles.timePickerHeaderRow}>
+          <Text style={styles.timePickerHeaderText}>{item.label}</Text>
+        </View>
+      );
+    }
+
+    const isSelected = item.value === selected;
+    return (
+      <TouchableOpacity
+        style={[styles.timePickerRow, isSelected && styles.timePickerRowSelected]}
+        onPress={() => {
+          onSelect(item.value);
+          close();
+        }}
+      >
+        <Text style={[styles.timePickerRowText, isSelected && styles.timePickerRowTextSelected]}>
+          {item.label}
+        </Text>
+        {isSelected ? <Ionicons name="checkmark" size={20} color="#007AFF" /> : null}
+      </TouchableOpacity>
+    );
   };
 
   const updateTimeRange = async (newStartTime: string, newEndTime: string) => {
@@ -173,51 +227,20 @@ const SettingsScreen = () => {
         {showTimeRangeSelector && (
           <View style={{ marginTop: 12 }}>
             <Text style={{ textAlign: 'center', color: '#666', marginBottom: 10 }}>
-              Choose when you're typically available. We'll randomly select a 1-hour window within this range each day.
+              Choose when you're typically available. We'll randomly select a 2-hour window within this range each day.
             </Text>
+
             <Text style={styles.timeLabel}>Start Time</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 50 }}>
-              <View style={{ flexDirection: 'row', paddingHorizontal: 10 }}>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = i.toString().padStart(2, '0');
-                  const time = `${hour}:00`;
-                  const selected = startTime === time;
-                  return (
-                    <TouchableOpacity
-                      key={`start-${time}`}
-                      style={[styles.timeButton, selected && styles.timeButtonSelected]}
-                      onPress={() => setStartTime(time)}
-                    >
-                      <Text style={[styles.timeButtonText, selected && styles.timeButtonTextSelected]}>
-                        {formatTime(time, hour12)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
+            <TouchableOpacity style={styles.dropdownButton} onPress={() => setStartTimePickerVisible(true)}>
+              <Text style={styles.dropdownButtonText}>{formatTime(startTime, hour12)}</Text>
+              <Ionicons name="chevron-down" size={18} color="#666" />
+            </TouchableOpacity>
 
             <Text style={styles.timeLabel}>End Time</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 50 }}>
-              <View style={{ flexDirection: 'row', paddingHorizontal: 10 }}>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = i.toString().padStart(2, '0');
-                  const time = `${hour}:00`;
-                  const selected = endTime === time;
-                  return (
-                    <TouchableOpacity
-                      key={`end-${time}`}
-                      style={[styles.timeButton, selected && styles.timeButtonSelected]}
-                      onPress={() => setEndTime(time)}
-                    >
-                      <Text style={[styles.timeButtonText, selected && styles.timeButtonTextSelected]}>
-                        {formatTime(time, hour12)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
+            <TouchableOpacity style={styles.dropdownButton} onPress={() => setEndTimePickerVisible(true)}>
+              <Text style={styles.dropdownButtonText}>{formatTime(endTime, hour12)}</Text>
+              <Ionicons name="chevron-down" size={18} color="#666" />
+            </TouchableOpacity>
 
             <TouchableOpacity style={[styles.primaryButton, { marginTop: 12 }]} onPress={() => updateTimeRange(startTime, endTime)}>
               <Text style={styles.primaryButtonText}>Save Time Range</Text>
@@ -225,6 +248,64 @@ const SettingsScreen = () => {
           </View>
         )}
       </View>
+
+      {/* Start Time Picker */}
+      <Modal
+        visible={startTimePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setStartTimePickerVisible(false)}
+      >
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerSheet}>
+            <View style={styles.timePickerSheetHeader}>
+              <Text style={styles.timePickerSheetTitle}>Select start time</Text>
+              <TouchableOpacity onPress={() => setStartTimePickerVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={timePickerItems}
+              keyExtractor={(item, index) =>
+                item.kind === 'header' ? `h-${item.label}-${index}` : `t-${item.value}-${index}`
+              }
+              renderItem={({ item }) =>
+                renderTimePickerItem(item, startTime, setStartTime, () => setStartTimePickerVisible(false))
+              }
+              style={styles.timePickerList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* End Time Picker */}
+      <Modal
+        visible={endTimePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEndTimePickerVisible(false)}
+      >
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerSheet}>
+            <View style={styles.timePickerSheetHeader}>
+              <Text style={styles.timePickerSheetTitle}>Select end time</Text>
+              <TouchableOpacity onPress={() => setEndTimePickerVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={timePickerItems}
+              keyExtractor={(item, index) =>
+                item.kind === 'header' ? `h-${item.label}-${index}` : `t-${item.value}-${index}`
+              }
+              renderItem={({ item }) =>
+                renderTimePickerItem(item, endTime, setEndTime, () => setEndTimePickerVisible(false))
+              }
+              style={styles.timePickerList}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Time Format Section */}
       <View style={styles.section}>
@@ -273,15 +354,6 @@ const SettingsScreen = () => {
       {/* Appearance removed */}
       
       {/* Audio Section removed */}
-      
-      {/* Account: keep only reset for testing */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <Button 
-          title="Reset Daily Log Status (For Testing)" 
-          onPress={handleResetDailyLog}
-        />
-      </View>
       
       {/* Data Section */}
       <View style={styles.section}>
@@ -525,6 +597,86 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     fontSize: 12,
     fontWeight: '500',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  timePickerSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: '70%',
+    paddingBottom: 10,
+  },
+  timePickerSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  timePickerSheetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+  },
+  timePickerList: {
+    flexGrow: 0,
+  },
+  timePickerHeaderRow: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  timePickerHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#666',
+    letterSpacing: 0.6,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f1f1',
+  },
+  timePickerRowSelected: {
+    backgroundColor: '#f0f7ff',
+  },
+  timePickerRowText: {
+    fontSize: 16,
+    color: '#111',
+    fontWeight: '500',
+  },
+  timePickerRowTextSelected: {
+    color: '#007AFF',
+    fontWeight: '700',
   },
 });
 
