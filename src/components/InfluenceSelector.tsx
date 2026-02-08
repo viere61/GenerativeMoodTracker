@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput } from 'react-native';
 import UserPreferencesService from '../services/UserPreferencesService';
 
 interface InfluenceSelectorProps {
   selectedInfluences: string[];
   onInfluencesChange: (influences: string[]) => void;
   onValidationChange?: (isValid: boolean) => void;
-  onBeginNestedScroll?: () => void;
-  onEndNestedScroll?: () => void;
 }
 
 /**
@@ -18,40 +16,40 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
   selectedInfluences,
   onInfluencesChange,
   onValidationChange,
-  onBeginNestedScroll,
-  onEndNestedScroll,
 }) => {
+  type InfluenceItem = { id: string; label: string; isCustom?: boolean };
+
   // Predefined influence categories
-  const defaultInfluences = [
+  const defaultInfluences: InfluenceItem[] = [
     // Relationships
-    { id: 'family', label: 'Family', emoji: '👨‍👩‍👧‍👦' },
-    { id: 'friends', label: 'Friends', emoji: '👥' },
-    { id: 'partner', label: 'Partner', emoji: '💕' },
-    { id: 'colleagues', label: 'Colleagues', emoji: '💼' },
+    { id: 'family', label: 'Family' },
+    { id: 'friends', label: 'Friends' },
+    { id: 'partner', label: 'Partner' },
+    { id: 'colleagues', label: 'Colleagues' },
     
     // Activities
-    { id: 'work', label: 'Work', emoji: '💻' },
-    { id: 'exercise', label: 'Exercise', emoji: '🏃‍♀️' },
-    { id: 'travel', label: 'Travel', emoji: '✈️' },
-    { id: 'hobbies', label: 'Hobbies', emoji: '🎨' },
-    { id: 'self-care', label: 'Self-care', emoji: '🧘‍♀️' },
+    { id: 'work', label: 'Work' },
+    { id: 'exercise', label: 'Exercise' },
+    { id: 'travel', label: 'Travel' },
+    { id: 'hobbies', label: 'Hobbies' },
+    { id: 'self-care', label: 'Self-care' },
     
     // Environment
-    { id: 'weather', label: 'Weather', emoji: '🌤️' },
-    { id: 'home', label: 'Home', emoji: '🏠' },
-    { id: 'work-environment', label: 'Work Environment', emoji: '🏢' },
+    { id: 'weather', label: 'Weather' },
+    { id: 'home', label: 'Home' },
+    { id: 'work-environment', label: 'Work Environment' },
     
     // Health
-    { id: 'physical-health', label: 'Physical Health', emoji: '🏥' },
-    { id: 'mental-health', label: 'Mental Health', emoji: '🧠' },
-    { id: 'sleep', label: 'Sleep', emoji: '😴' },
+    { id: 'physical-health', label: 'Physical Health' },
+    { id: 'mental-health', label: 'Mental Health' },
+    { id: 'sleep', label: 'Sleep' },
     
     // Life Events
-    { id: 'special-occasion', label: 'Special Occasion', emoji: '🎉' },
-    { id: 'challenge', label: 'Challenge', emoji: '⚡' },
-    { id: 'achievement', label: 'Achievement', emoji: '🏆' },
-    { id: 'food', label: 'Food', emoji: '🍕' },
-    { id: 'music', label: 'Music', emoji: '🎵' },
+    { id: 'special-occasion', label: 'Special Occasion' },
+    { id: 'challenge', label: 'Challenge' },
+    { id: 'achievement', label: 'Achievement' },
+    { id: 'food', label: 'Food' },
+    { id: 'music', label: 'Music' },
   ];
 
   const [customInfluences, setCustomInfluences] = useState<string[]>([]);
@@ -65,9 +63,9 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
     })();
   }, []);
 
-  const availableInfluences = [
+  const availableInfluences: InfluenceItem[] = [
     ...defaultInfluences,
-    ...customInfluences.map(label => ({ id: label.toLowerCase().replace(/\s+/g, '-'), label, emoji: '📝' }))
+    ...customInfluences.map(label => ({ id: label.toLowerCase().replace(/\s+/g, '-'), label, isCustom: true }))
   ];
 
   // Handle influence selection/deselection
@@ -119,38 +117,8 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
       <Text style={styles.title}>What influenced your mood?</Text>
       <Text style={styles.subtitle}>Select all that apply</Text>
       
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-        nestedScrollEnabled={true}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={true}
-        keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets
-        // Android nested-scroll fix: keep the parent ScrollView from taking over mid-gesture
-        onTouchStart={() => {
-          if (Platform.OS === 'android') onBeginNestedScroll?.();
-        }}
-        onTouchEnd={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-        onTouchCancel={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-        onScrollBeginDrag={() => {
-          if (Platform.OS === 'android') onBeginNestedScroll?.();
-        }}
-        onScrollEndDrag={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-        onMomentumScrollBegin={() => {
-          if (Platform.OS === 'android') onBeginNestedScroll?.();
-        }}
-        onMomentumScrollEnd={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-      >
+      {/* Option A: no inner scrolling (avoid Android nested scroll conflicts) */}
+      <View style={styles.content}>
         <View style={styles.addRow}>
           <TextInput
             style={[styles.input, { color: '#000' }]}
@@ -180,14 +148,13 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
             accessibilityRole="checkbox"
             accessibilityState={{ checked: selectedInfluences.includes(influence.id) }}
           >
-            <Text style={styles.influenceEmoji}>{influence.emoji}</Text>
             <Text style={[
               styles.influenceText,
               selectedInfluences.includes(influence.id) && styles.selectedInfluenceText
             ]}>
               {influence.label}
             </Text>
-            {influence.emoji === '📝' && (
+            {influence.isCustom && (
               <TouchableOpacity
                 style={styles.removeBtn}
                 onPress={(e) => { e.stopPropagation?.(); removeCustomInfluence(influence.label); }}
@@ -200,7 +167,7 @@ const InfluenceSelector: React.FC<InfluenceSelectorProps> = ({
           </TouchableOpacity>
         ))}
         </View>
-      </ScrollView>
+      </View>
       
       {selectedInfluences.length === 0 && (
         <Text style={styles.validationMessage} accessibilityLiveRegion="polite">
@@ -235,10 +202,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 15,
-  },
-  scrollView: {
-    maxHeight: 200,
-    flexGrow: 0, // Prevent the ScrollView from expanding beyond maxHeight
   },
   content: {
     paddingBottom: 10,
@@ -295,10 +258,6 @@ const styles = StyleSheet.create({
   selectedInfluenceButton: {
     backgroundColor: '#4CAF50',
     borderColor: '#4CAF50',
-  },
-  influenceEmoji: {
-    fontSize: 16,
-    marginRight: 6,
   },
   influenceText: {
     fontSize: 14,

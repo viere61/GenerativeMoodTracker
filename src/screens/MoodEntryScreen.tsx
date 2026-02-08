@@ -53,7 +53,6 @@ const MoodEntryScreen = () => {
   const [hasAlreadyLoggedToday, setHasAlreadyLoggedToday] = useState(false);
   const [useSimpleComponents, setUseSimpleComponents] = useState(false);
   const [isSliding, setIsSliding] = React.useState(false);
-  const [isNestedListInteracting, setIsNestedListInteracting] = React.useState(false);
   
   // Check if user has already logged a mood today
   useEffect(() => {
@@ -350,8 +349,7 @@ const MoodEntryScreen = () => {
             contentContainerStyle={{ flexGrow: 1, padding: 20 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator
-            nestedScrollEnabled={Platform.OS === 'android'}
-            scrollEnabled={!isSliding && !(Platform.OS === 'android' && isNestedListInteracting)}
+            scrollEnabled={!isSliding}
           >
             {/* Title removed per request */}
             <View style={styles.ratingContainer}>
@@ -360,7 +358,7 @@ const MoodEntryScreen = () => {
                 leftLabel="Very unpleasant"
                 rightLabel="Very pleasant"
                 mode="valence"
-                showEmoji={true}
+                showEmoji={false}
                 value={moodRating}
                 onChange={(v) => { setMoodRating(v); }}
                 onValidationChange={(ok) => setIsRatingValid(!!ok)}
@@ -386,12 +384,6 @@ const MoodEntryScreen = () => {
                 onChange={setEmotionTags}
                 onValidationChange={setAreTagsValid}
                 minSelections={1}
-                onBeginNestedScroll={() => {
-                  if (Platform.OS === 'android') setIsNestedListInteracting(true);
-                }}
-                onEndNestedScroll={() => {
-                  if (Platform.OS === 'android') setIsNestedListInteracting(false);
-                }}
               />
             </View>
             <View style={styles.influencesContainer}>
@@ -399,12 +391,6 @@ const MoodEntryScreen = () => {
                 selectedInfluences={influences}
                 onInfluencesChange={setInfluences}
                 onValidationChange={setAreInfluencesValid}
-                onBeginNestedScroll={() => {
-                  if (Platform.OS === 'android') setIsNestedListInteracting(true);
-                }}
-                onEndNestedScroll={() => {
-                  if (Platform.OS === 'android') setIsNestedListInteracting(false);
-                }}
               />
             </View>
             <View style={styles.submitContainer}>
@@ -462,7 +448,7 @@ const MoodEntryScreen = () => {
               leftLabel="Very unpleasant"
               rightLabel="Very pleasant"
               mode="valence"
-              showEmoji={true}
+              showEmoji={false}
               value={moodRating}
               onChange={(v) => { setMoodRating(v); }}
               onValidationChange={(ok) => setIsRatingValid(!!ok)}

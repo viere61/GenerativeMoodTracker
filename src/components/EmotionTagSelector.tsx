@@ -4,10 +4,8 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  ScrollView,
   AccessibilityInfo,
-  TextInput,
-  Platform
+  TextInput
 } from 'react-native';
 import UserPreferencesService from '../services/UserPreferencesService';
 
@@ -17,8 +15,6 @@ interface EmotionTagSelectorProps {
   availableTags?: string[];
   onValidationChange?: (isValid: boolean) => void;
   minSelections?: number;
-  onBeginNestedScroll?: () => void;
-  onEndNestedScroll?: () => void;
 }
 
 /**
@@ -36,8 +32,6 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
   ],
   onValidationChange,
   minSelections = 1,
-  onBeginNestedScroll,
-  onEndNestedScroll,
 }) => {
   // Track if screen reader is enabled for enhanced accessibility
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
@@ -150,34 +144,8 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
       <Text style={styles.title}>How are you feeling?</Text>
       <Text style={styles.subtitle}>Select all emotions that apply</Text>
       
-      <ScrollView
-        style={styles.tagsScrollView}
-        contentContainerStyle={styles.tagsContainer}
-        nestedScrollEnabled={true}
-        keyboardShouldPersistTaps="handled"
-        // Android nested-scroll fix: keep the parent ScrollView from taking over mid-gesture
-        onTouchStart={() => {
-          if (Platform.OS === 'android') onBeginNestedScroll?.();
-        }}
-        onTouchEnd={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-        onTouchCancel={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-        onScrollBeginDrag={() => {
-          if (Platform.OS === 'android') onBeginNestedScroll?.();
-        }}
-        onScrollEndDrag={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-        onMomentumScrollBegin={() => {
-          if (Platform.OS === 'android') onBeginNestedScroll?.();
-        }}
-        onMomentumScrollEnd={() => {
-          if (Platform.OS === 'android') onEndNestedScroll?.();
-        }}
-      >
+      {/* Option A: no inner scrolling (avoid Android nested scroll conflicts) */}
+      <View style={styles.tagsContainer}>
         {/* Add custom emotion tag */}
         <View style={styles.addRow}>
           <TextInput
@@ -299,7 +267,7 @@ const EmotionTagSelector: React.FC<EmotionTagSelectorProps> = ({
             </View>
           </View>
         )}
-      </ScrollView>
+      </View>
       
       {selectedTags.length > 0 && (
         <View style={styles.selectedTagsContainer}>
@@ -339,9 +307,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 15,
-  },
-  tagsScrollView: {
-    maxHeight: 300,
   },
   addRow: {
     flexDirection: 'row',
