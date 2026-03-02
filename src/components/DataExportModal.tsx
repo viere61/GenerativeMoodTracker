@@ -103,7 +103,10 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
             <>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Export</Text>
-                <Text style={{ color: '#555', marginBottom: 8 }}>A CSV file including your music data will be generated.</Text>
+                <Text style={{ color: '#555', marginBottom: 8 }}>A CSV file will be generated.</Text>
+                <Text style={{ color: '#555', marginBottom: 8 }}>
+                  To send your data to your computer, email the CSV file to yourself. On your computer, open it with Google Sheets, Excel, or Numbers (Mac), review it, remove anything you don’t want to share, then email it to us.
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.exportButton}
@@ -115,7 +118,7 @@ const DataExportModal: React.FC<DataExportModalProps> = ({ visible, onClose, use
                 ) : (
                   <>
                     <Ionicons name="download-outline" size={20} color="#fff" style={styles.buttonIcon} />
-                    <Text style={styles.exportButtonText}>Export CSV with music</Text>
+                    <Text style={styles.exportButtonText}>Export CSV</Text>
                   </>
                 )}
               </TouchableOpacity>
