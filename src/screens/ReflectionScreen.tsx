@@ -38,10 +38,10 @@ const ReflectionScreen: React.FC = () => {
     'If your mood were a time of day, what would it be?',
     'What plant or flower represents how you\'re feeling?',
     'If your mood were a beverage, what would it be?',
-    'What sounds are you craving right now—rain, traffic, silence, music?',
-    'What natural element matches your feeling—fire, water, earth, air?',
-    'What kind of light describes your mood—bright sunlight, candlelight, moonlight, shadows?',
-    'What kind of container holds your mood today—a jar, a basket, an open box, a sealed envelope?',
+    'What sounds are you craving right now—rain, traffic, silence, music, etc.?',
+    'What natural element matches your feeling—fire, water, earth, air, etc.?',
+    'What kind of light describes your mood—bright sunlight, candlelight, moonlight, shadows, etc.?',
+    'What kind of container holds your mood today—a jar, a basket, an open box, a sealed envelope, etc.?',
   ];
   const [randomPrompt] = useState(() => promptPool[Math.floor(Math.random() * promptPool.length)]);
 
