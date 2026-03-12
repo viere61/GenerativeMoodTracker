@@ -1,6 +1,6 @@
 import { DailyWindow } from '../types';
 import UserPreferencesService from './UserPreferencesService';
-import { generateRandomWindow, generateRandomWindowForDate, isWithinWindow, formatTime, getTimeUntil } from '../utils/timeWindow';
+import { generateRandomWindowForDate, getLocalDateString, isWithinWindow, formatTime, getTimeUntil } from '../utils/timeWindow';
 import StorageService from './StorageService';
 import MoodEntryService from './MoodEntryService';
 
@@ -10,6 +10,33 @@ const DAILY_WINDOW_KEY = 'daily_window';
  * Simple service for managing daily time windows
  */
 class TimeWindowService {
+  private parseLocalDateKey(dateKey: string): Date {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    // Use noon to avoid DST edge cases around midnight.
+    dt.setHours(12, 0, 0, 0);
+    return dt;
+  }
+
+  private getLegacyUtcKeyCandidates(localDateKey: string): string[] {
+    // Old code used toISOString().split('T')[0] (UTC date) as the storage key.
+    // Depending on timezone/time-of-day, that could shift by +/- 1 day.
+    const base = this.parseLocalDateKey(localDateKey);
+    const keys = new Set<string>();
+
+    keys.add(localDateKey);
+    keys.add(base.toISOString().split('T')[0]);
+
+    const prev = new Date(base);
+    prev.setDate(prev.getDate() - 1);
+    keys.add(prev.toISOString().split('T')[0]);
+
+    const next = new Date(base);
+    next.setDate(next.getDate() + 1);
+    keys.add(next.toISOString().split('T')[0]);
+
+    return Array.from(keys);
+  }
   
   /**
    * Get the stored daily window for a user
@@ -62,11 +89,13 @@ class TimeWindowService {
       
       const { start, end } = preferences.preferredTimeRange;
       
-      // Generate random window
-      const { windowStart, windowEnd, date } = generateRandomWindow(start, end);
+      // Generate a window for *today* (local date). Future windows are handled by createMultiDayWindows.
+      const targetDate = new Date();
+      targetDate.setHours(12, 0, 0, 0);
+      const { windowStart, windowEnd, date } = generateRandomWindowForDate(start, end, targetDate);
       
       // Check if this is today's window and if user has already logged
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       const hasLogged = date === today && await MoodEntryService.hasLoggedMoodToday(userId);
       
       // Create daily window object
@@ -81,6 +110,8 @@ class TimeWindowService {
       
       // Save it
       await this.saveDailyWindow(dailyWindow);
+      // Also save under the date-specific key for consistency
+      await this.saveDailyWindowForDate(dailyWindow, dailyWindow.date);
       
       return dailyWindow;
     } catch (error) {
@@ -93,10 +124,21 @@ class TimeWindowService {
    * Get current daily window (create if needed)
    */
   async getCurrentWindow(userId: string): Promise<DailyWindow> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     
     // First check the generic daily window key
     let existingWindow = await this.getDailyWindow(userId);
+
+    // Migrate old UTC-based date value if the stored windowStart belongs to today (local)
+    if (existingWindow) {
+      const windowStartLocalDate = getLocalDateString(new Date(existingWindow.windowStart));
+      if (windowStartLocalDate === today && existingWindow.date !== today) {
+        const migrated = { ...existingWindow, date: today };
+        existingWindow = migrated;
+        await this.saveDailyWindow(migrated);
+        await this.saveDailyWindowForDate(migrated, today);
+      }
+    }
     
     // If not found or outdated, check the date-specific key for today
     if (!existingWindow || existingWindow.date !== today) {
@@ -149,19 +191,23 @@ class TimeWindowService {
       
       // Clear windows for the next 30 days to be thorough
       const today = new Date();
+      today.setHours(12, 0, 0, 0);
       let clearedCount = 0;
       
       for (let i = 0; i <= 30; i++) {
         const targetDate = new Date(today);
         targetDate.setDate(today.getDate() + i);
-        const dateString = targetDate.toISOString().split('T')[0];
+        const dateString = getLocalDateString(targetDate);
         
-        // Check if window exists for this date
-        const existingWindow = await this.getDailyWindowForDate(userId, dateString);
-        if (existingWindow) {
-          await this.deleteDailyWindowForDate(userId, dateString);
-          clearedCount++;
-          console.log(`🧹 [clearAllFutureDateSpecificWindows] Cleared window for ${dateString}: ${new Date(existingWindow.windowStart).toLocaleString()}`);
+        // Remove both local-key and legacy UTC-key windows for this local date
+        const candidates = this.getLegacyUtcKeyCandidates(dateString);
+        for (const candidate of candidates) {
+          const existingWindow = await this.getDailyWindowForDate(userId, candidate);
+          if (existingWindow) {
+            await this.deleteDailyWindowForDate(userId, candidate);
+            clearedCount++;
+            console.log(`🧹 [clearAllFutureDateSpecificWindows] Cleared window for ${candidate}: ${new Date(existingWindow.windowStart).toLocaleString()}`);
+          }
         }
       }
       
@@ -187,7 +233,7 @@ class TimeWindowService {
       
       // Check if already logged today - verify against MoodEntryService for accuracy
       // This ensures accuracy even if windows are regenerated after preferences change
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       const hasLoggedToday = window.date === today && await MoodEntryService.hasLoggedMoodToday(userId);
       
       // Update window's hasLogged flag if it's out of sync
@@ -283,7 +329,7 @@ class TimeWindowService {
   async hasLoggedToday(userId: string): Promise<boolean> {
     try {
       const window = await this.getDailyWindow(userId);
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       
       return window?.date === today && window?.hasLogged === true;
     } catch (error) {
@@ -297,14 +343,41 @@ class TimeWindowService {
    */
   async getDailyWindowForDate(userId: string, date: string): Promise<DailyWindow | null> {
     try {
+      // Primary lookup uses local date keys (YYYY-MM-DD local).
       const key = `${DAILY_WINDOW_KEY}_${userId}_${date}`;
       const windowData = await StorageService.getItem(key);
-      
-      if (!windowData) {
-        return null;
+
+      if (windowData) {
+        return JSON.parse(windowData) as DailyWindow;
       }
-      
-      return JSON.parse(windowData) as DailyWindow;
+
+      // Legacy fallback: try old UTC-based keys (can be shifted by +/- 1 day).
+      const candidates = this.getLegacyUtcKeyCandidates(date);
+      for (const candidate of candidates) {
+        if (candidate === date) continue;
+        const legacyKey = `${DAILY_WINDOW_KEY}_${userId}_${candidate}`;
+        const legacyData = await StorageService.getItem(legacyKey);
+        if (!legacyData) continue;
+
+        const legacyWindow = JSON.parse(legacyData) as DailyWindow;
+        const legacyStartLocal = getLocalDateString(new Date(legacyWindow.windowStart));
+
+        // Only migrate if the windowStart actually belongs to the requested local date.
+        if (legacyStartLocal !== date) continue;
+
+        const migrated: DailyWindow = { ...legacyWindow, date };
+        await this.saveDailyWindowForDate(migrated, date);
+        await StorageService.removeItem(legacyKey);
+
+        // If this is today, also refresh the generic key for consistency.
+        if (date === getLocalDateString()) {
+          await this.saveDailyWindow(migrated);
+        }
+
+        return migrated;
+      }
+
+      return null;
     } catch (error) {
       console.error('Error getting daily window for date:', error);
       return null;
@@ -346,10 +419,13 @@ class TimeWindowService {
       
       console.log('🗓️ Creating multi-day windows for', daysAhead, 'days ahead');
 
+      const base = new Date();
+      base.setHours(12, 0, 0, 0);
+
       for (let i = 0; i < daysAhead; i++) {
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + i);
-        const dateString = targetDate.toISOString().split('T')[0];
+        const targetDate = new Date(base);
+        targetDate.setDate(base.getDate() + i);
+        const dateString = getLocalDateString(targetDate);
         
                  // Check if window already exists for this date
          let existingWindow = await this.getDailyWindowForDate(userId, dateString);
@@ -440,10 +516,12 @@ class TimeWindowService {
       console.log('🔍 [getNextWindowAfterToday] Looking for tomorrow\'s window or later...');
 
       // Look for the next available window starting from tomorrow (extend to 30 days)
+      const base = new Date();
+      base.setHours(12, 0, 0, 0);
       for (let i = 1; i <= 30; i++) {
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + i);
-        const dateString = targetDate.toISOString().split('T')[0];
+        const targetDate = new Date(base);
+        targetDate.setDate(base.getDate() + i);
+        const dateString = getLocalDateString(targetDate);
         
         const window = await this.getDailyWindowForDate(userId, dateString);
         console.log(`🔍 [getNextWindowAfterToday] ${dateString} window:`, window ? {
@@ -471,7 +549,7 @@ class TimeWindowService {
    */
   async getNextAvailableWindow(userId: string): Promise<DailyWindow | null> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       const now = Date.now();
 
       console.log('🔍 [getNextAvailableWindow] Looking for next available window...');
@@ -493,10 +571,12 @@ class TimeWindowService {
       }
 
       // Look for the next available window in the next 30 days
+      const base = new Date();
+      base.setHours(12, 0, 0, 0);
       for (let i = 1; i <= 30; i++) {
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + i);
-        const dateString = targetDate.toISOString().split('T')[0];
+        const targetDate = new Date(base);
+        targetDate.setDate(base.getDate() + i);
+        const dateString = getLocalDateString(targetDate);
         
         const window = await this.getDailyWindowForDate(userId, dateString);
         console.log(`🔍 [getNextAvailableWindow] ${dateString} window:`, window ? {
@@ -565,7 +645,8 @@ class TimeWindowService {
     try {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowDateString = tomorrow.toISOString().split('T')[0];
+      tomorrow.setHours(12, 0, 0, 0);
+      const tomorrowDateString = getLocalDateString(tomorrow);
       
       // Get user preferences first; initialize defaults if missing
       let preferences = await UserPreferencesService.getPreferences(userId);

@@ -3,6 +3,17 @@
  */
 
 /**
+ * Local calendar date key in YYYY-MM-DD (uses device local timezone).
+ * Avoid using toISOString() for day keys because it is UTC.
+ */
+export const getLocalDateString = (date: Date = new Date()): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+/**
  * Generates a random 2-hour logging window within the user's preferred time range
  * If the preference is exactly 2 hours, uses the exact time range
  * @param preferredStart Start time in "HH:MM" format (e.g., "09:00")
@@ -38,7 +49,7 @@ export const generateRandomWindow = (preferredStart: string, preferredEnd: strin
     const windowEndDate = new Date(windowDate);
     windowEndDate.setHours(endHour, endMinute, 0, 0);
     
-    const dateString = windowDate.toISOString().split('T')[0];
+    const dateString = getLocalDateString(windowDate);
     
     console.log('Generated exact 2-hour window:', {
       preferredRange: `${preferredStart} - ${preferredEnd}`,
@@ -91,7 +102,7 @@ export const generateRandomWindow = (preferredStart: string, preferredEnd: strin
   const windowEndDate = new Date(windowDate);
   windowEndDate.setHours(windowEndDate.getHours() + 2);
   
-  const dateString = windowDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+  const dateString = getLocalDateString(windowDate); // YYYY-MM-DD local
   
   console.log('Generated random window:', {
     preferredRange: `${preferredStart} - ${preferredEnd}`,
@@ -135,7 +146,7 @@ export const generateRandomWindowForDate = (preferredStart: string, preferredEnd
     const windowEndDate = new Date(targetDate);
     windowEndDate.setHours(endHour, endMinute, 0, 0);
     
-    const dateString = windowDate.toISOString().split('T')[0];
+    const dateString = getLocalDateString(windowDate);
     
     console.log('Generated exact 2-hour window for date:', {
       targetDate: targetDate.toDateString(),
@@ -175,7 +186,7 @@ export const generateRandomWindowForDate = (preferredStart: string, preferredEnd
   const windowEndDate = new Date(windowDate);
   windowEndDate.setHours(windowEndDate.getHours() + 2);
   
-  const dateString = windowDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+  const dateString = getLocalDateString(windowDate); // YYYY-MM-DD local
   
   console.log('Generated random window for date:', {
     targetDate: targetDate.toDateString(),

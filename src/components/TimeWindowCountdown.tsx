@@ -173,7 +173,9 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
     if (windowEndTime && currentTime > windowEndTime) {
       // Check if the next window is today or tomorrow
       const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
-      const isTomorrow = new Date(nextWindowTime).toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const isTomorrow = new Date(nextWindowTime).toDateString() === tomorrow.toDateString();
       
       if (isToday) {
        return `Next window opens at ${formatTime(nextWindowTime, hour12)} today`;
@@ -191,7 +193,9 @@ const TimeWindowCountdown: React.FC<TimeWindowCountdownProps> = ({
     } else if (!isComplete) {
       // Check if the next window is today or tomorrow
       const isToday = new Date(nextWindowTime).toDateString() === new Date().toDateString();
-      const isTomorrow = new Date(nextWindowTime).toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const isTomorrow = new Date(nextWindowTime).toDateString() === tomorrow.toDateString();
       
       if (isToday) {
         return `Opens at ${formatTime(nextWindowTime, hour12)} today`;

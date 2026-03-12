@@ -205,7 +205,9 @@ const HomeScreen = () => {
       console.log('🏠 [handleResetTimeWindow] ✅ Created', multiDayWindows.length, 'multi-day windows');
 
       // Log today's window details to verify it's correct
-      const todayWindow = multiDayWindows.find(w => w.date === new Date().toISOString().split('T')[0]);
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const todayWindow = multiDayWindows.find(w => w.date === todayKey);
       if (todayWindow) {
         console.log('🏠 [handleResetTimeWindow] Today\'s window details:', {
           date: todayWindow.date,
